@@ -10,6 +10,7 @@ export function parseEvent(parser: string, raw: any): AgentEvent | null {
   switch (parser) {
     case 'opencode': return parseOpencode(raw);
     case 'codex': return parseCodex(raw);
+    case 'claude': return parseClaude(raw);
     default: return parseGeneric(raw);
   }
 }
@@ -100,9 +101,53 @@ function parseCodex(raw: any): AgentEvent | null {
   return parseGeneric(raw);
 }
 
+function parseClaude(raw: any): AgentEvent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const type = raw.type;
+
+  if (type === 'system' && raw.subtype === 'init') {
+    return { type: 'session_init', sessionId: raw.session_id ?? raw.sessionId ?? '' };
+  }
+  if (type === 'assistant') {
+    const content = raw.message?.content;
+    if (Array.isArray(content)) {
+      for (const part of content) {
+        if (part.type === 'thinking') {
+          const text = part.thinking ?? '';
+          if (text) return { type: 'text', content: '[思考] ' + text };
+          return { type: 'status', status: 'thinking' };
+        }
+        if (part.type === 'text') {
+          const text = part.text ?? '';
+          if (text) return { type: 'text', content: text };
+          return { type: 'status', status: 'thinking' };
+        }
+        if (part.type === 'tool_use') {
+          return { type: 'tool_use', tool: part.name ?? 'unknown', input: part.input ?? {}, toolUseId: part.id };
+        }
+      }
+    }
+    return null;
+  }
+  if (type === 'user') {
+    const content = raw.message?.content;
+    if (Array.isArray(content)) {
+      for (const part of content) {
+        if (part.type === 'tool_result') {
+          return { type: 'tool_result', toolUseId: part.tool_use_id ?? '', output: part.content ?? part.output ?? {} };
+        }
+      }
+    }
+    return null;
+  }
+  if (type === 'result') {
+    return { type: 'done', isFinal: true, error: raw.is_error ? String(raw.result ?? 'error') : undefined };
+  }
+  return parseGeneric(raw);
+}
+
 function parseGeneric(raw: any): AgentEvent | null {
   if (!raw || typeof raw !== 'object') return null;
-
   if (raw.sessionId || raw.session_id) {
     return { type: 'session_init', sessionId: raw.sessionId ?? raw.session_id };
   }

@@ -3,8 +3,9 @@ import { ReactFlow, Background, Controls, type NodeTypes } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useDAGStore } from './stores/dagStore';
 import RoleNode from './components/RoleNode';
+import StartNode from './components/StartNode';
 
-const nodeTypes: NodeTypes = { roleNode: RoleNode };
+const nodeTypes: NodeTypes = { roleNode: RoleNode, startNode: StartNode };
 
 export default function App() {
   const [message, setMessage] = useState('');
@@ -41,13 +42,13 @@ export default function App() {
     init();
   }, []);
 
-  const loadTaskList = async () => {
+  const loadTaskList = useCallback(async () => {
     try {
       const res = await fetch('/api/tasks');
       const data = await res.json();
       setTaskList(data);
     } catch {}
-  };
+  }, []);
 
   const restoreTask = async (tid: string) => {
     try {
@@ -60,7 +61,7 @@ export default function App() {
         const teamRes = await fetch(`/api/teams/${data.teamId}`);
         const team = await teamRes.json();
         if (team.roles) {
-          initTeam(tid, team.roles, team.strategy);
+          initTeam(tid, team.roles, team.strategy, data.message);
         } else {
           setTask(tid);
         }
@@ -77,6 +78,32 @@ export default function App() {
       }
     } catch {}
   };
+
+  const connectSSE = useCallback((tid: string) => {
+    if (eventSourceRef.current) eventSourceRef.current.close();
+
+    const es = new EventSource(`/api/tasks/${tid}/stream`);
+    eventSourceRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'task_done') {
+          setTaskStatus(data.status || 'done');
+          loadTaskList();
+          es.close();
+        } else {
+          handleEvent(data);
+        }
+      } catch (err) {
+        console.error('SSE parse error:', err);
+      }
+    };
+
+    es.onerror = () => {
+      // EventSource 会自动重连
+    };
+  }, [handleEvent, setTaskStatus, loadTaskList]);
 
   const handleSubmit = useCallback(async () => {
     if (!message.trim()) return;
@@ -102,8 +129,9 @@ export default function App() {
         const teamRes = await fetch(`/api/teams/${data.teamId}`);
         const team = await teamRes.json();
         if (team.roles) {
-          initTeam(data.taskId, team.roles, team.strategy);
+          initTeam(data.taskId, team.roles, team.strategy, message);
         }
+        setMessage('');
         connectSSE(data.taskId);
         loadTaskList();
       }
@@ -112,32 +140,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [message, teamId, reset, setTask]);
-
-  const connectSSE = useCallback((tid: string) => {
-    if (eventSourceRef.current) eventSourceRef.current.close();
-
-    const es = new EventSource(`/api/tasks/${tid}/stream`);
-    eventSourceRef.current = es;
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'task_done') {
-          setTaskStatus(data.status || 'done');
-          es.close();
-        } else {
-          handleEvent(data);
-        }
-      } catch (err) {
-        console.error('SSE parse error:', err);
-      }
-    };
-
-    es.onerror = () => {
-      // EventSource 会自动重连
-    };
-  }, [handleEvent, setTaskStatus]);
+  }, [message, teamId, reset, initTeam, connectSSE, loadTaskList]);
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#11111b' }}>

@@ -114,3 +114,40 @@ teams:
         team_strengths: "综合分析、决策建议"
         max_turns: 20
         env_allowlist: ["OPENAI_API_KEY"]
+
+  triple:
+    name: "三CLI协作"
+    strategy: serial
+    transitions:
+      - { from: planner, to: builder, condition: always }
+      - { from: builder, to: checker, condition: always }
+    total_budget:
+      max_turns: 100
+      timeout_ms: 1800000
+    roles:
+      - id: planner
+        cli: opencode
+        system_prompt: "你是规划师，分析需求并制定计划。产出：简要计划 + 步骤清单。用中文回答。"
+        tools: [file_read, search]
+        handoff: true
+        team_strengths: "规划、分析"
+        caution: "不要写代码，只输出计划"
+        max_turns: 20
+        env_allowlist: ["OPENAI_API_KEY"]
+      - id: builder
+        cli: claude
+        system_prompt: "你是实现者，根据规划师的计划执行。用中文回答。"
+        tools: [file_edit, bash, search]
+        receives_from: [planner]
+        handoff: true
+        team_strengths: "代码实现"
+        max_turns: 50
+        env_allowlist: ["ANTHROPIC_API_KEY"]
+      - id: checker
+        cli: codex
+        system_prompt: "你是检查者，审查实现结果并给出反馈。用中文回答。"
+        tools: [file_read, bash, search]
+        receives_from: [builder]
+        team_strengths: "审查、反馈"
+        max_turns: 20
+        env_allowlist: ["OPENAI_API_KEY"]

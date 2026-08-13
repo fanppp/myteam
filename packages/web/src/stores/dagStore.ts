@@ -10,6 +10,17 @@ interface RoleNodeData {
   caution?: string | null;
 }
 
+interface StartNodeData {
+  content: string;
+}
+
+type TeamRole = {
+  id: string;
+  team_strengths?: string;
+  caution?: string | null;
+  receives_from?: string[];
+};
+
 interface DAGState {
   nodes: Node[];
   edges: Edge[];
@@ -18,7 +29,7 @@ interface DAGState {
   processedEventIds: Set<number>;
   setTask: (taskId: string) => void;
   setTaskStatus: (status: string) => void;
-  initTeam: (taskId: string, roles: { id: string; team_strengths?: string; caution?: string | null }[], strategy: string) => void;
+  initTeam: (taskId: string, roles: TeamRole[], strategy: string, message?: string) => void;
   handleEvent: (event: any) => void;
   syncNodeStatuses: (taskStatus: string) => void;
   reset: () => void;
@@ -54,6 +65,7 @@ export const useDAGStore = create<DAGState>((set, get) => ({
     if (taskStatus === 'running') return;
     const fixTo = taskStatus === 'done' ? 'done' : taskStatus === 'error' ? 'error' : 'stale';
     const nodes = get().nodes.map(n => {
+      if (n.type === 'startNode') return n;
       const data = n.data as RoleNodeData;
       if (data.status === 'running' || data.status === 'thinking' || data.status === 'tool') {
         return { ...n, data: { ...data, status: fixTo } };
@@ -63,8 +75,8 @@ export const useDAGStore = create<DAGState>((set, get) => ({
     set({ nodes });
   },
 
-  initTeam: (taskId, roles, strategy) => {
-    const nodes: Node[] = roles.map((role, i) => {
+  initTeam: (taskId, roles, strategy, message) => {
+    const roleNodes: Node[] = roles.map((role, i) => {
       let position: { x: number; y: number };
       if (strategy === 'parallel') {
         const isLast = i === roles.length - 1;
@@ -89,7 +101,29 @@ export const useDAGStore = create<DAGState>((set, get) => ({
         } as RoleNodeData,
       };
     });
-    set({ nodes, edges: [], processedEventIds: new Set(), taskId });
+    const startNodeId = `${taskId}-start`;
+    const hasMessage = Boolean(message?.trim());
+    const parallelRoles = roles.filter(role => !role.receives_from?.length);
+    const startNode: Node | undefined = hasMessage ? {
+      id: startNodeId,
+      type: 'startNode',
+      position: {
+        x: -(NODE_WIDTH + H_GAP),
+        y: strategy === 'parallel'
+          ? ((parallelRoles.length - 1) * (NODE_HEIGHT + V_GAP)) / 2
+          : 0,
+      },
+      data: { content: message!.trim() } as StartNodeData,
+    } : undefined;
+    const startTargets = strategy === 'parallel' ? parallelRoles : roles.slice(0, 1);
+    const startEdges: Edge[] = startNode ? startTargets.map(role => ({
+      id: `${startNodeId}->${taskId}-${role.id}`,
+      source: startNodeId,
+      target: `${taskId}-${role.id}`,
+      animated: true,
+      style: { stroke: '#a855f7', strokeWidth: 2 },
+    })) : [];
+    set({ nodes: startNode ? [startNode, ...roleNodes] : roleNodes, edges: startEdges, processedEventIds: new Set(), taskId });
   },
 
   handleEvent: (event) => {
