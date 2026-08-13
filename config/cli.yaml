@@ -1,0 +1,27 @@
+providers:
+  opencode:
+    command: opencode
+    args: ["run", "--format", "json"]
+    cwd_mode: worktree
+    event_parser: opencode
+    prompt_via: arg
+    env:
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+
+  codex:
+    command: codex
+    args: ["exec", "--json", "--skip-git-repo-check", "--", "-"]
+    cwd_mode: worktree
+    event_parser: codex
+    prompt_via: stdin
+    env:
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+
+  claude:
+    command: claude
+    args: ["-p", "--output-format", "stream-json", "--"]
+    cwd_mode: worktree
+    event_parser: claude
+    prompt_via: stdin
+    env:
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"

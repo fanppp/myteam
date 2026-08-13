@@ -1,0 +1,46 @@
+intent_rules:
+  - intent: qa
+    patterns: ["什么是", "怎么", "为什么", "解释", "what", "how", "why", "?", "？"]
+    team: qa
+
+  - intent: engineering
+    patterns:
+      - "实现"
+      - "修复"
+      - "重构"
+      - "开发"
+      - "工程"
+      - "架构"
+      - "计划"
+      - "编码"
+      - "审查"
+      - "测试"
+      - "分别"
+      - "多步骤"
+      - "多角色"
+      - "流水线"
+      - "implement"
+      - "fix"
+      - "refactor"
+      - "build"
+      - "planning"
+      - "coding"
+      - "review"
+      - "testing"
+      - "plan"
+      - "code"
+      - "develop"
+      - "architecture"
+      - "pipeline"
+      - "engineer"
+    team: engineering
+
+  - intent: brainstorm
+    patterns: ["比较", "权衡", "方案", "compare", "trade-off", "design", "对比", "讨论", "头脑风暴", "brainstorm"]
+    team: brainstorm
+
+  - intent: solo
+    patterns: ["写", "改", "add", "update", "创建", "生成", "简单"]
+    team: solo-coder
+
+default_team: solo-coder

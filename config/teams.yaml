@@ -1,0 +1,116 @@
+teams:
+  solo-coder:
+    name: "单人编程"
+    strategy: adaptive
+    transitions:
+      - { from: coder, to: coder, condition: always }
+    total_budget:
+      max_turns: 50
+      timeout_ms: 1800000
+    roles:
+      - id: coder
+        cli: opencode
+        system_prompt: "你是一个资深全栈工程师，负责完成用户的编程任务。"
+        tools: [file_edit, bash, search]
+        max_turns: 50
+        team_strengths: "全栈开发、快速实现"
+        caution: null
+        env_allowlist: ["OPENAI_API_KEY"]
+
+  engineering:
+    name: "工程团队"
+    strategy: serial
+    transitions:
+      - { from: architect, to: implementer, condition: always }
+      - { from: implementer, to: reviewer, condition: always }
+      - { from: implementer, to: architect, condition: on_handoff }
+      - { from: reviewer, to: implementer, condition: on_handoff }
+    total_budget:
+      max_turns: 100
+      timeout_ms: 1800000
+    roles:
+      - id: architect
+        cli: opencode
+        system_prompt: "你是架构师，分析需求并设计技术方案。产出：方案文档 + 待办清单。"
+        tools: [file_read, search]
+        handoff: true
+        team_strengths: "架构设计、技术选型"
+        caution: "不要直接写代码，只输出方案"
+        restrictions: ["禁止写代码"]
+        max_turns: 30
+        env_allowlist: ["OPENAI_API_KEY"]
+
+      - id: implementer
+        cli: codex
+        system_prompt: "你是实现者，根据架构师的方案实现代码。"
+        tools: [file_edit, bash, search]
+        receives_from: [architect]
+        handoff: true
+        team_strengths: "代码实现、调试"
+        max_turns: 50
+        env_allowlist: ["OPENAI_API_KEY"]
+
+      - id: reviewer
+        cli: codex
+        system_prompt: "你是代码审查者，检查实现质量并给出反馈。"
+        tools: [file_read, bash, search]
+        receives_from: [implementer]
+        team_strengths: "代码审查、安全分析"
+        caution: "关注安全漏洞和代码质量"
+        max_turns: 20
+        env_allowlist: ["OPENAI_API_KEY"]
+
+  qa:
+    name: "问答团队"
+    strategy: serial
+    transitions:
+      - { from: researcher, to: answerer, condition: always }
+    total_budget:
+      max_turns: 50
+      timeout_ms: 900000
+    roles:
+      - id: researcher
+        cli: opencode
+        system_prompt: "你是研究员，搜索和整理相关信息。"
+        tools: [search, file_read]
+        handoff: true
+        team_strengths: "信息检索、资料整理"
+        max_turns: 30
+        env_allowlist: ["OPENAI_API_KEY"]
+      - id: answerer
+        cli: codex
+        system_prompt: "你是回答者，基于研究员的资料给出清晰回答。"
+        receives_from: [researcher]
+        team_strengths: "清晰表达、逻辑组织"
+        max_turns: 20
+        env_allowlist: ["OPENAI_API_KEY"]
+
+  brainstorm:
+    name: "头脑风暴"
+    strategy: parallel
+    transitions:
+      - { from: optimist, to: synthesizer, condition: always }
+      - { from: critic, to: synthesizer, condition: always }
+    total_budget:
+      max_turns: 50
+      timeout_ms: 900000
+    roles:
+      - id: optimist
+        cli: opencode
+        system_prompt: "从乐观视角分析方案优势。"
+        team_strengths: "创新思维、乐观分析"
+        max_turns: 15
+        env_allowlist: ["OPENAI_API_KEY"]
+      - id: critic
+        cli: codex
+        system_prompt: "从批判视角分析方案风险。"
+        team_strengths: "风险识别、批判分析"
+        max_turns: 15
+        env_allowlist: ["OPENAI_API_KEY"]
+      - id: synthesizer
+        cli: codex
+        system_prompt: "综合各方观点，给出平衡建议。"
+        receives_from: [optimist, critic]
+        team_strengths: "综合分析、决策建议"
+        max_turns: 20
+        env_allowlist: ["OPENAI_API_KEY"]
