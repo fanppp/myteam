@@ -18,24 +18,25 @@ function parseOpencode(raw: any): AgentEvent | null {
   if (!raw || typeof raw !== 'object') return null;
   const type = raw.type ?? raw.event;
   const part = raw.part ?? {};
+  const partType = part.type;
 
   if (type === 'step_start') {
     return { type: 'status', status: 'thinking' };
   }
-  if (type === 'text' || type === 'message') {
-    const content = part.text ?? raw.content?.text ?? raw.text ?? raw.message ?? '';
-    if (content) return { type: 'text', content };
-    return { type: 'status', status: 'thinking' };
-  }
-  if (type === 'reasoning' || type === 'thinking') {
-    const content = part.text ?? part.reasoning ?? raw.reasoning ?? '';
+  if (partType === 'reasoning' || partType === 'thinking' || type === 'reasoning' || type === 'thinking') {
+    const content = part.text ?? part.reasoning ?? raw.reasoning ?? raw.text ?? '';
     if (content) return { type: 'text', content: '[思考] ' + content };
     return { type: 'status', status: 'thinking' };
   }
-  if (type === 'tool_call' || type === 'tool_use') {
+  if (type === 'text' || type === 'message' || partType === 'text') {
+    const content = part.text ?? raw.content?.text ?? raw.text ?? raw.message ?? part.content ?? '';
+    if (content) return { type: 'text', content };
+    return { type: 'status', status: 'thinking' };
+  }
+  if (type === 'tool_call' || type === 'tool_use' || partType === 'tool_use') {
     return { type: 'tool_use', tool: part.name ?? raw.name ?? part.tool ?? 'unknown', input: part.input ?? raw.input ?? {}, toolUseId: part.id ?? raw.id };
   }
-  if (type === 'tool_result' || type === 'tool_call_output') {
+  if (type === 'tool_result' || type === 'tool_call_output' || partType === 'tool_result') {
     return { type: 'tool_result', toolUseId: part.id ?? raw.id ?? '', output: part.output ?? raw.output ?? part.content ?? raw.content ?? {} };
   }
   if (type === 'step_finish') {
@@ -62,6 +63,11 @@ function parseCodex(raw: any): AgentEvent | null {
     return { type: 'status', status: 'running' };
   }
   if (type === 'item.completed' || type === 'item.created') {
+    if (item.type === 'reasoning' || item.type === 'thinking') {
+      const content = item.text ?? item.content ?? item.reasoning ?? '';
+      if (content) return { type: 'text', content: '[思考] ' + content };
+      return null;
+    }
     if (item.type === 'agent_message' || item.type === 'message' || item.type === 'text') {
       const content = item.text ?? item.content ?? '';
       if (content) return { type: 'text', content };

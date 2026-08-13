@@ -135,8 +135,9 @@ function RoleNodeComponent({ data }: { data: any }) {
       {/* 内容区域 */}
       {hasContent ? (
         <div
+          className="nodrag nowheel"
           style={{
-            maxHeight: '300px',
+            maxHeight: '400px',
             overflow: 'auto',
             padding: '10px 14px',
             lineHeight: '1.5',

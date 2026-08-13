@@ -20,6 +20,7 @@ interface DAGState {
   setTaskStatus: (status: string) => void;
   initTeam: (taskId: string, roles: { id: string; team_strengths?: string; caution?: string | null }[], strategy: string) => void;
   handleEvent: (event: any) => void;
+  syncNodeStatuses: (taskStatus: string) => void;
   reset: () => void;
 }
 
@@ -48,6 +49,19 @@ export const useDAGStore = create<DAGState>((set, get) => ({
   setTaskStatus: (status) => set({ taskStatus: status }),
 
   reset: () => set({ nodes: [], edges: [], taskId: null, taskStatus: null, processedEventIds: new Set() }),
+
+  syncNodeStatuses: (taskStatus: string) => {
+    if (taskStatus === 'running') return;
+    const fixTo = taskStatus === 'done' ? 'done' : taskStatus === 'error' ? 'error' : 'stale';
+    const nodes = get().nodes.map(n => {
+      const data = n.data as RoleNodeData;
+      if (data.status === 'running' || data.status === 'thinking' || data.status === 'tool') {
+        return { ...n, data: { ...data, status: fixTo } };
+      }
+      return n;
+    });
+    set({ nodes });
+  },
 
   initTeam: (taskId, roles, strategy) => {
     const nodes: Node[] = roles.map((role, i) => {

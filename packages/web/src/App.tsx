@@ -19,7 +19,7 @@ export default function App() {
     } catch {}
     return { x: 0, y: 0, zoom: 0.8 };
   });
-  const { nodes, edges, taskId, taskStatus, setTask, setTaskStatus, handleEvent, reset, initTeam } = useDAGStore();
+  const { nodes, edges, taskId, taskStatus, setTask, setTaskStatus, handleEvent, syncNodeStatuses, reset, initTeam } = useDAGStore();
   const eventSourceRef = useRef<EventSource | null>(null);
   const rfRef = useRef<any>(null);
 
@@ -71,6 +71,7 @@ export default function App() {
         handleEvent(event);
       }
       setTaskStatus(data.status);
+      syncNodeStatuses(data.status);
       if (data.status === 'running') {
         connectSSE(tid);
       }
