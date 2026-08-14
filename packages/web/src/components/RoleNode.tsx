@@ -78,6 +78,18 @@ function RoleNodeComponent({ data }: { data: any }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '16px' }}>{icon}</span>
           <strong style={{ color: '#cdd6f4', fontSize: '14px' }}>{data.roleId}</strong>
+          {data.cli && (
+            <span style={{
+              padding: '1px 6px',
+              borderRadius: '4px',
+              background: '#6366f122',
+              color: '#818cf8',
+              fontSize: '10px',
+              fontWeight: 600,
+            }}>
+              {data.cli}
+            </span>
+          )}
           {data.teamStrengths && isPending && (
             <span style={{ color: '#6c7086', fontSize: '11px', marginLeft: '4px' }}>
               {data.teamStrengths}

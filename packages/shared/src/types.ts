@@ -77,6 +77,7 @@ export interface TaskEvent {
   attemptId: string;
   type: DAGEventType;
   content?: string;
+  cli?: string;
   nodeId?: string;
   toolUseId?: string;
   toolName?: string;

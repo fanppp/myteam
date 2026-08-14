@@ -19,7 +19,7 @@ providers:
 
   claude:
     command: claude
-    args: ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", "--"]
+    args: ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--permission-mode", "bypassPermissions", "--"]
     cwd_mode: worktree
     event_parser: claude
     prompt_via: stdin

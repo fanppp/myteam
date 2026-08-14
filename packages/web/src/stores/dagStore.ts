@@ -5,6 +5,7 @@ interface RoleNodeData {
   roleId: string;
   status: string;
   content: string;
+  cli?: string;
   toolName?: string;
   teamStrengths?: string;
   caution?: string | null;
@@ -16,6 +17,7 @@ interface StartNodeData {
 
 type TeamRole = {
   id: string;
+  cli?: string;
   team_strengths?: string;
   caution?: string | null;
   receives_from?: string[];
@@ -96,6 +98,7 @@ export const useDAGStore = create<DAGState>((set, get) => ({
           roleId: role.id,
           status: 'pending',
           content: '',
+          cli: role.cli,
           teamStrengths: role.team_strengths,
           caution: role.caution,
         } as RoleNodeData,

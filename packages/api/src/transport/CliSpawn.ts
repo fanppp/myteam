@@ -10,6 +10,10 @@ export interface SpawnResult {
   stderr: string;
 }
 
+const DEFAULT_STALL_MS = 120_000;
+const STALL_CHECK_INTERVAL = 10_000;
+const KILL_GRACE_MS = 3_000;
+
 export async function spawnCli(
   role: ResolvedRole,
   prompt: string,
@@ -17,6 +21,7 @@ export async function spawnCli(
   timeoutMs: number,
   signal: AbortSignal,
   onEvent?: (event: AgentEvent) => void,
+  stallMs: number = DEFAULT_STALL_MS,
 ): Promise<SpawnResult> {
   const cli = role.cliConfig;
   const events: AgentEvent[] = [];
@@ -35,6 +40,17 @@ export async function spawnCli(
     shell: false,
   });
 
+  let lastActivityTime = Date.now();
+  let killed = false;
+
+  function killChild(reason: string) {
+    if (killed) return;
+    killed = true;
+    console.warn(`[CliSpawn] killing child: ${reason}`);
+    try { child.kill('SIGTERM'); } catch {}
+    setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, KILL_GRACE_MS);
+  }
+
   if (child.stdin) {
     if (!isArgMode) {
       console.log('[CliSpawn] writing stdin:', prompt.length, 'chars');
@@ -46,7 +62,7 @@ export async function spawnCli(
 
   let lineBuf = '';
   child.stdout!.on('data', (chunk: Buffer) => {
-    console.log('[CliSpawn] stdout:', chunk.length, 'bytes');
+    lastActivityTime = Date.now();
     lineBuf += chunk.toString('utf-8');
     const lines = lineBuf.split('\n');
     lineBuf = lines.pop() ?? '';
@@ -64,7 +80,7 @@ export async function spawnCli(
           events.push(parsed);
           onEvent?.(parsed);
           if (parsed.type === 'done' && parsed.isFinal) {
-            try { child.kill('SIGTERM'); } catch {}
+            killChild('done event received');
           }
         } else if (raw.part?.text) {
           const ev = { type: 'text' as const, content: raw.part.text };
@@ -90,16 +106,32 @@ export async function spawnCli(
   });
 
   const timeout = new Promise<void>((resolve) => {
-    const t = setTimeout(() => {
-      try { child.kill('SIGTERM'); } catch {}
-      setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 3000);
+    const totalTimer = setTimeout(() => {
+      killChild(`total timeout ${timeoutMs}ms`);
       resolve();
     }, timeoutMs || 60000);
+
+    const stallTimer = setInterval(() => {
+      const elapsed = Date.now() - lastActivityTime;
+      if (elapsed > stallMs) {
+        clearInterval(stallTimer);
+        killChild(`stall detected: no stdout for ${Math.round(elapsed / 1000)}s`);
+        resolve();
+      }
+    }, STALL_CHECK_INTERVAL);
+    stallTimer.unref();
+
     signal.addEventListener('abort', () => {
-      clearTimeout(t);
-      try { child.kill('SIGTERM'); } catch {}
+      clearTimeout(totalTimer);
+      clearInterval(stallTimer);
+      killChild('abort signal');
       resolve();
     }, { once: true });
+
+    child.on('close', () => {
+      clearTimeout(totalTimer);
+      clearInterval(stallTimer);
+    });
   });
 
   console.log('[CliSpawn] command:', cli.command);
