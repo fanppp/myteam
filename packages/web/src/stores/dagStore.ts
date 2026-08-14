@@ -136,14 +136,14 @@ export const useDAGStore = create<DAGState>((set, get) => ({
     const newProcessed = new Set(state.processedEventIds);
     newProcessed.add(event.eventId);
 
-    const { type, nodeId, roleId, content, status, fromNode, toNode, toolName } = event;
+    const { type, nodeId, roleId, content, status, fromNode, toNode, toolName, cli } = event;
 
     switch (type) {
       case 'node_start': {
         if (state.nodes.some(n => n.id === nodeId)) {
           const nodes = state.nodes.map(n =>
             n.id === nodeId
-              ? { ...n, data: { ...(n.data as RoleNodeData), status: 'running' as const } }
+              ? { ...n, data: { ...(n.data as RoleNodeData), status: 'running' as const, ...(cli ? { cli } : {}) } }
               : n
           );
           set({ nodes, processedEventIds: newProcessed });
@@ -154,7 +154,7 @@ export const useDAGStore = create<DAGState>((set, get) => ({
           id: nodeId,
           type: 'roleNode',
           position: getPosition(index),
-          data: { roleId, status: 'running', content: '' } as RoleNodeData,
+          data: { roleId, status: 'running', content: '', cli } as RoleNodeData,
         };
         set({ nodes: [...state.nodes, newNode], processedEventIds: newProcessed });
         break;

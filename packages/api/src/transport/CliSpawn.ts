@@ -61,43 +61,55 @@ export async function spawnCli(
   }
 
   let lineBuf = '';
+
+  function processLine(line: string) {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    try {
+      const raw = JSON.parse(trimmed);
+      if (raw.sessionID && !sessionId) sessionId = raw.sessionID;
+      const parsed = parseEvent(cli.event_parser, raw);
+      if (parsed) {
+        if (parsed.type === 'session_init' && parsed.sessionId) {
+          sessionId = parsed.sessionId;
+        }
+        events.push(parsed);
+        onEvent?.(parsed);
+        if (parsed.type === 'done' && parsed.isFinal) {
+          killChild('done event received');
+        }
+      } else if (raw.part?.text) {
+        const ev = { type: 'text' as const, content: raw.part.text };
+        events.push(ev);
+        onEvent?.(ev);
+      }
+    } catch (e: any) {
+      console.error('[CliSpawn] JSON parse failed:', e?.message, 'line len:', trimmed.length, 'first 80:', trimmed.slice(0, 80));
+      events.push({ type: 'text', content: trimmed });
+    }
+  }
+
   child.stdout!.on('data', (chunk: Buffer) => {
     lastActivityTime = Date.now();
     lineBuf += chunk.toString('utf-8');
     const lines = lineBuf.split('\n');
     lineBuf = lines.pop() ?? '';
     for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        const raw = JSON.parse(trimmed);
-        if (raw.sessionID && !sessionId) sessionId = raw.sessionID;
-        const parsed = parseEvent(cli.event_parser, raw);
-        if (parsed) {
-          if (parsed.type === 'session_init' && parsed.sessionId) {
-            sessionId = parsed.sessionId;
-          }
-          events.push(parsed);
-          onEvent?.(parsed);
-          if (parsed.type === 'done' && parsed.isFinal) {
-            killChild('done event received');
-          }
-        } else if (raw.part?.text) {
-          const ev = { type: 'text' as const, content: raw.part.text };
-          events.push(ev);
-          onEvent?.(ev);
-        }
-      } catch (e: any) {
-        console.error('[CliSpawn] JSON parse failed:', e?.message, 'line len:', trimmed.length, 'first 80:', trimmed.slice(0, 80));
-        events.push({ type: 'text', content: trimmed });
-      }
+      processLine(line);
     }
   });
 
   child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf-8'); });
 
   const done = new Promise<void>((resolve) => {
-    child.on('close', () => resolve());
+    child.on('close', () => {
+      if (lineBuf.trim()) {
+        console.log('[CliSpawn] flushing residual lineBuf:', lineBuf.length, 'chars');
+        processLine(lineBuf);
+        lineBuf = '';
+      }
+      resolve();
+    });
     child.on('error', (err) => {
       console.error('[CliSpawn] error:', err.message);
       stderr += `Spawn error: ${err.message}\n`;

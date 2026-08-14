@@ -43,6 +43,7 @@ export class AppDatabase {
         from_node TEXT,
         to_node TEXT,
         status TEXT,
+        cli TEXT,
         epoch TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
@@ -55,6 +56,14 @@ export class AppDatabase {
         PRIMARY KEY (task_id, role_id)
       );
     `);
+    this.migrate();
+  }
+
+  private migrate() {
+    const cols = this.db.prepare('PRAGMA table_info(events)').all() as Array<{ name: string }>;
+    if (!cols.some(c => c.name === 'cli')) {
+      this.db.exec('ALTER TABLE events ADD COLUMN cli TEXT');
+    }
   }
 
   createTask(id: string, message: string, teamId: string, worktreePath: string) {
@@ -76,12 +85,12 @@ export class AppDatabase {
 
   appendEvent(event: Omit<TaskEvent, 'eventId' | 'createdAt'>): TaskEvent {
     const result = this.db.prepare(
-      `INSERT INTO events (task_id, role_id, attempt_id, type, content, node_id, tool_use_id, tool_name, from_node, to_node, status, epoch, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      `INSERT INTO events (task_id, role_id, attempt_id, type, content, node_id, tool_use_id, tool_name, from_node, to_node, status, cli, epoch, created_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).run(
       event.taskId, event.roleId ?? null, event.attemptId, event.type, event.content ?? null,
       event.nodeId ?? null, event.toolUseId ?? null, event.toolName ?? null,
-      event.fromNode ?? null, event.toNode ?? null, event.status ?? null,
+      event.fromNode ?? null, event.toNode ?? null, event.status ?? null, event.cli ?? null,
       event.epoch, Date.now()
     ) as any;
     return { ...event, eventId: Number(result.lastInsertRowid), createdAt: Date.now() };
@@ -95,7 +104,7 @@ export class AppDatabase {
       eventId: r.event_id, taskId: r.task_id, roleId: r.role_id, attemptId: r.attempt_id,
       type: r.type as DAGEventType, content: r.content, nodeId: r.node_id,
       toolUseId: r.tool_use_id, toolName: r.tool_name, fromNode: r.from_node,
-      toNode: r.to_node, status: r.status as RoleStatus | undefined,
+      toNode: r.to_node, status: r.status as RoleStatus | undefined, cli: r.cli,
       epoch: r.epoch, createdAt: r.created_at,
     }));
   }

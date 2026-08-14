@@ -88,7 +88,7 @@ export class TaskRuntime {
       const attemptId = `${plan.taskId}-${role.id}-${i}`;
 
       this.emit('node_start', plan.taskId, role.id, attemptId, {
-        nodeId, status: 'running', content: role.id,
+        nodeId, status: 'running', content: role.id, cli: role.cli,
       });
 
       if (i > 0) {
@@ -144,7 +144,7 @@ export class TaskRuntime {
       const attemptId = `${plan.taskId}-${role.id}-0`;
 
       this.emit('node_start', plan.taskId, role.id, attemptId, {
-        nodeId, status: 'running', content: role.id,
+        nodeId, status: 'running', content: role.id, cli: role.cli,
       });
 
       const prompt = this.buildPrompt(role, message, plan);
@@ -178,7 +178,7 @@ export class TaskRuntime {
       }
 
       this.emit('node_start', plan.taskId, synthesizer.id, attemptId, {
-        nodeId, status: 'running', content: synthesizer.id,
+        nodeId, status: 'running', content: synthesizer.id, cli: synthesizer.cli,
       });
 
       const combinedInput = parallelRoles.map(r => `【${r.id}的观点】\n${results[r.id]}`).join('\n\n');
@@ -228,12 +228,16 @@ ${input}
   ): { type: DAGEventType; extra: Partial<TaskEvent> } | null {
     switch (ev.type) {
       case 'text':
-        return { type: 'node_output', extra: { nodeId, content: ev.content, status: 'thinking' } };
+        return { type: 'node_output', extra: { nodeId, content: ev.content, status: 'running' } };
       case 'tool_use':
         return { type: 'tool_use', extra: { nodeId, toolName: ev.tool, toolUseId: ev.toolUseId, content: JSON.stringify(ev.input), status: 'tool' } };
       case 'tool_result':
-        return { type: 'tool_result', extra: { nodeId, toolUseId: ev.toolUseId, content: JSON.stringify(ev.output), status: 'tool' } };
+        return { type: 'tool_result', extra: { nodeId, toolUseId: ev.toolUseId, content: JSON.stringify(ev.output), status: 'running' } };
       case 'status':
+        if (ev.status === 'rate_limited') {
+          const msg = `[速率限制] 等待 API 恢复${ev.resetsAt ? '，重置于 ' + ev.resetsAt : ''}...`;
+          return { type: 'node_output', extra: { nodeId, content: msg, status: 'running' } };
+        }
         return { type: 'node_output', extra: { nodeId, content: '', status: ev.status as RoleStatus } };
       case 'session_init':
         return null;

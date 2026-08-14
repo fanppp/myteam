@@ -3,7 +3,7 @@ export type AgentEvent =
   | { type: 'text'; content: string }
   | { type: 'tool_use'; tool: string; input: unknown; toolUseId?: string }
   | { type: 'tool_result'; toolUseId: string; output: unknown }
-  | { type: 'status'; status: 'thinking' | 'running' }
+  | { type: 'status'; status: 'thinking' | 'running' | 'rate_limited'; resetsAt?: string }
   | { type: 'done'; isFinal: boolean; error?: string };
 
 export function parseEvent(parser: string, raw: any): AgentEvent | null {
@@ -108,6 +108,32 @@ function parseClaude(raw: any): AgentEvent | null {
   if (type === 'system' && raw.subtype === 'init') {
     return { type: 'session_init', sessionId: raw.session_id ?? raw.sessionId ?? '' };
   }
+  if (type === 'rate_limit_event') {
+    const resetsAt = typeof raw.resets_at === 'string' ? raw.resets_at : undefined;
+    return { type: 'status', status: 'rate_limited', resetsAt };
+  }
+  if (type === 'stream_event') {
+    const se = raw.stream_event ?? {};
+    const seType = se.type;
+    if (seType === 'message_start') return null;
+    if (seType === 'content_block_delta') {
+      const delta = se.delta ?? {};
+      if (delta.type === 'text_delta') {
+        const text = delta.text ?? '';
+        if (text) return { type: 'text', content: text };
+        return null;
+      }
+      if (delta.type === 'thinking_delta') {
+        const text = delta.thinking ?? '';
+        if (text) return { type: 'text', content: '[思考] ' + text };
+        return null;
+      }
+      return null;
+    }
+    if (seType === 'content_block_stop') return null;
+    if (seType === 'message_stop') return null;
+    return null;
+  }
   if (type === 'assistant') {
     const content = raw.message?.content;
     if (Array.isArray(content)) {
@@ -141,7 +167,8 @@ function parseClaude(raw: any): AgentEvent | null {
     return null;
   }
   if (type === 'result') {
-    return { type: 'done', isFinal: true, error: raw.is_error ? String(raw.result ?? 'error') : undefined };
+    const isError = raw.is_error === true || (raw.subtype && raw.subtype !== 'success');
+    return { type: 'done', isFinal: true, error: isError ? String(raw.result ?? raw.subtype ?? 'error') : undefined };
   }
   return parseGeneric(raw);
 }
