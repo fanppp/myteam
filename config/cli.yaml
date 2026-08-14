@@ -1,7 +1,7 @@
 providers:
   opencode:
     command: opencode
-    args: ["run", "--format", "json"]
+    args: ["run", "--format", "json", "--auto"]
     cwd_mode: worktree
     event_parser: opencode
     prompt_via: arg
@@ -10,7 +10,7 @@ providers:
 
   codex:
     command: codex
-    args: ["exec", "--json", "--skip-git-repo-check", "--", "-"]
+    args: ["exec", "--json", "--skip-git-repo-check", "--sandbox", "danger-full-access", "--config", "approval_policy=\"never\"", "--", "-"]
     cwd_mode: worktree
     event_parser: codex
     prompt_via: stdin
@@ -19,7 +19,7 @@ providers:
 
   claude:
     command: claude
-    args: ["-p", "--output-format", "stream-json", "--verbose", "--"]
+    args: ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", "--"]
     cwd_mode: worktree
     event_parser: claude
     prompt_via: stdin
