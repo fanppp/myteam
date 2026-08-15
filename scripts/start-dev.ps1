@@ -21,7 +21,17 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $PSCommandPath
 . (Join-Path $ScriptDir "worktree-helpers.ps1")
 
-$ProjectRoot = Get-ProjectRoot
+# -- Resolve project root (from cwd, not script location) --
+$ProjectRoot = Get-Location
+# Verify we're in a myteam worktree
+if (-not (Test-Path (Join-Path $ProjectRoot "packages"))) {
+    # Fallback: resolve from script location
+    $ScriptPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
+    if ($ScriptPath) {
+        $ScriptDir = Split-Path -Parent $ScriptPath
+        $ProjectRoot = Split-Path -Parent $ScriptDir
+    }
+}
 
 # -- Guard: main branch start --
 function Guard-MainBranchStart {

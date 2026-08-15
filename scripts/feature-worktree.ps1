@@ -111,7 +111,8 @@ function Invoke-FeatureStart {
 
     # Delegate to start-dev.ps1 (runs in worktree dir, has guards)
     $startScript = Join-Path $ScriptDir "start-dev.ps1"
-    & powershell -ExecutionPolicy Bypass -File $startScript -Quick
+    Push-Location $dir
+    try { & powershell -ExecutionPolicy Bypass -File $startScript -Quick } finally { Pop-Location }
 }
 
 function Invoke-FeatureList {
