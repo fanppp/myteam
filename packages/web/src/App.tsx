@@ -119,7 +119,7 @@ export default function App() {
     } catch {}
   };
 
-  const connectSSE = useCallback((tid: string, isNewSession = false) => {
+  const connectSSE = useCallback((tid: string) => {
     if (eventSourceRef.current) eventSourceRef.current.close();
 
     const es = new EventSource(`/api/tasks/${tid}/stream`);
@@ -130,7 +130,8 @@ export default function App() {
         const data = JSON.parse(event.data);
         if (data.type === 'task_done') {
           setTaskStatus(data.status || 'done');
-          if (isNewSession) loadTaskList();
+          syncNodeStatuses(data.status || 'done');
+          loadTaskList();
           es.close();
         } else {
           handleEvent(data);
@@ -143,7 +144,7 @@ export default function App() {
     es.onerror = () => {
       // EventSource 会自动重连
     };
-  }, [handleEvent, setTaskStatus, loadTaskList]);
+  }, [handleEvent, setTaskStatus, syncNodeStatuses, loadTaskList]);
 
   const continueSession = useCallback(async (newMessage: string, sid: string, tid: string) => {
     if (!newMessage.trim() || !sid) return;
@@ -213,7 +214,7 @@ export default function App() {
           initTeam(data.taskId, team.roles, team.strategy, message, data.sessionId, [], continueSession, data.teamId);
         }
         setMessage('');
-        connectSSE(data.taskId, true);
+        connectSSE(data.taskId);
         setTaskStatus('running');
         loadTaskList();
       }
