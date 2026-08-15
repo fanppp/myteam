@@ -1,0 +1,37 @@
+#!/bin/sh
+# myteam pre-commit hook
+# Rejects commits inside protected worktrees (runtime, alpha)
+# and on protected sync branches (runtime/main-sync, alpha/main-sync)
+# Main repo (master) is allowed for plans, docs, config.
+
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+repo_name=$(basename "${repo_root:-}")
+
+# Protected sync branches (never allow direct commits)
+protected_branches="runtime/main-sync alpha/main-sync"
+
+for p in $protected_branches; do
+    if [ "$branch" = "$p" ]; then
+        echo ""
+        echo "✗ Commit rejected: on protected branch '$branch'"
+        echo "  All code changes must happen in feature worktrees."
+        echo "  Create one: pnpm feature:create <name>"
+        echo "  Or override (not recommended): git commit --no-verify"
+        echo ""
+        exit 1
+    fi
+done
+
+# Block commits inside protected worktree directories
+case "$repo_name" in
+    myteam-runtime|myteam-alpha)
+        echo ""
+        echo "✗ Commit rejected: inside $repo_name (protected environment)"
+        echo "  Use a feature worktree instead: pnpm feature:create <name>"
+        echo ""
+        exit 1
+        ;;
+esac
+
+exit 0

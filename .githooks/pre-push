@@ -1,0 +1,35 @@
+#!/bin/sh
+# myteam pre-push hook
+# Rejects pushes from protected worktrees (runtime, alpha)
+# and protected sync branches (runtime/main-sync, alpha/main-sync)
+
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+repo_name=$(basename "${repo_root:-}")
+
+# Protected sync branches
+protected_branches="runtime/main-sync alpha/main-sync"
+
+for p in $protected_branches; do
+    if [ "$branch" = "$p" ]; then
+        echo ""
+        echo "✗ Push rejected: on protected branch '$branch'"
+        echo "  Push from a feature branch instead:"
+        echo "    git push origin feat/<name>"
+        echo ""
+        exit 1
+    fi
+done
+
+# Block pushes from protected worktree directories
+case "$repo_name" in
+    myteam-runtime|myteam-alpha)
+        echo ""
+        echo "✗ Push rejected: inside $repo_name (protected environment)"
+        echo "  Push from a feature worktree instead."
+        echo ""
+        exit 1
+        ;;
+esac
+
+exit 0

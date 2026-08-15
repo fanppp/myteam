@@ -8,6 +8,8 @@
     "dev:web": "pnpm --filter @myteam/web dev",
     "dev:direct": "powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "build": "pnpm -r build",
+    "postinstall": "bash scripts/install-git-guards.sh 2>/dev/null || true",
+    "guards:install": "bash scripts/install-git-guards.sh",
     "runtime:init": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 init",
     "runtime:sync": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 sync",
     "runtime:start": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 start",
@@ -20,7 +22,8 @@
     "feature:create": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 create",
     "feature:start": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 start",
     "feature:list": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 list",
-    "feature:remove": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 remove"
+    "feature:remove": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 remove",
+    "feature:pr": "powershell -ExecutionPolicy Bypass -File scripts/feature-pr.ps1"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
