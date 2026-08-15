@@ -32,11 +32,20 @@ export default function App() {
         const res = await fetch('/api/tasks');
         const data = await res.json();
         const seen = new Map<string, any>();
+        const latestStatus = new Map<string, string>();
         for (const t of data) {
+          const sid = t.sessionId || t.taskId;
+          latestStatus.set(sid, t.status);
+        }
+        for (let i = data.length - 1; i >= 0; i--) {
+          const t = data[i];
           const sid = t.sessionId || t.taskId;
           if (!seen.has(sid)) seen.set(sid, t);
         }
-        const deduped = Array.from(seen.values());
+        const deduped = Array.from(seen.values()).map(t => ({
+          ...t,
+          status: latestStatus.get(t.sessionId || t.taskId) || t.status
+        }));
         setTaskList(deduped);
         const saved = localStorage.getItem('currentTaskId');
         const tid = saved || deduped[0]?.taskId;
@@ -53,11 +62,21 @@ export default function App() {
       const res = await fetch('/api/tasks');
       const data = await res.json();
       const seen = new Map<string, any>();
+      const latestStatus = new Map<string, string>();
       for (const t of data) {
+        const sid = t.sessionId || t.taskId;
+        latestStatus.set(sid, t.status);
+      }
+      for (let i = data.length - 1; i >= 0; i--) {
+        const t = data[i];
         const sid = t.sessionId || t.taskId;
         if (!seen.has(sid)) seen.set(sid, t);
       }
-      setTaskList(Array.from(seen.values()));
+      const deduped = Array.from(seen.values()).map(t => ({
+        ...t,
+        status: latestStatus.get(t.sessionId || t.taskId) || t.status
+      }));
+      setTaskList(deduped);
     } catch {}
   }, []);
 
