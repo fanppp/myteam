@@ -152,11 +152,11 @@ function StartNodeComponent({ data }: { data: any }) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="输入消息... (Enter发送, Ctrl+Enter换行)"
-          rows={1}
+          rows={3}
           style={{
             flex: 1,
-            minHeight: '36px',
-            maxHeight: '120px',
+            minHeight: '72px',
+            maxHeight: '150px',
             background: '#181825',
             border: '1px solid #45475a',
             borderRadius: '6px',
@@ -164,7 +164,7 @@ function StartNodeComponent({ data }: { data: any }) {
             fontSize: '13px',
             padding: '8px',
             outline: 'none',
-            resize: 'none',
+            resize: 'vertical',
             boxSizing: 'border-box',
           }}
         />
