@@ -176,6 +176,7 @@ export default function App() {
           initTeam(data.taskId, team.roles, team.strategy, newMessage, sid, history, continueSession, data.teamId);
         }
         connectSSE(data.taskId);
+        setTaskStatus('running');
       }
     } catch (err) {
       console.error('Failed to continue session:', err);
@@ -213,6 +214,7 @@ export default function App() {
         }
         setMessage('');
         connectSSE(data.taskId, true);
+        setTaskStatus('running');
         loadTaskList();
       }
     } catch (err) {
