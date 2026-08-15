@@ -58,9 +58,25 @@ function Invoke-FeatureCreate {
     Pop-Location
 
     $offset = Get-FeatureOffset $name
+    $apiPort = 3102 - $offset
+    $webPort = 5102 - $offset
+    $envName = "feature-$name"
+    $dataDir = Get-MyTeamDataDir -EnvName $envName
+
+    Write-Host "  Writing .env (offset=$offset, API=$apiPort, Web=$webPort)..."
+    $envContent = @"
+MYTEAM_ENV=$envName
+MYTEAM_API_PORT=$apiPort
+MYTEAM_WEB_PORT=$webPort
+MYTEAM_DB_PATH=$dataDir
+WORKTREE_PORT_OFFSET=$offset
+"@
+    Set-Content -Path (Join-Path $dir ".env") -Value $envContent -Encoding UTF8
+
     Write-Ok "Feature '$name' created at $dir (offset=$offset)"
     Write-Host "  Branch: $branch"
-    Write-Host "  Start with: .\scripts\feature-worktree.ps1 start $name"
+    Write-Host "  Ports: API=$apiPort Web=$webPort"
+    Write-Host "  Start: pnpm feature:start $name"
 }
 
 function Invoke-FeatureStart {
@@ -69,98 +85,33 @@ function Invoke-FeatureStart {
     $dir = Get-FeatureDir $name
     if (-not (Test-Path $dir)) { Write-Err "Feature worktree not found: $dir"; exit 1 }
 
-    $offset = Get-FeatureOffset $name
-    $envName = "feature-$name"
-    $dataDir = Get-MyTeamDataDir -EnvName $envName
-
-    Write-Step "Feature start: $name (offset=$offset)"
-
-    $deriveResult = node -e "
-        const { deriveWorktreePorts } = require(join(process.argv[1], '..', 'scripts', 'derive-ports.mjs'));
-        try {
-            const ports = deriveWorktreePorts($offset);
-            console.log(ports.api + ' ' + ports.web);
-        } catch(e) { console.error(e.message); process.exit(1); }
-    " "$ProjectRoot" 2>&1
-    # Fallback if require doesn't work with ESM
-    if ($LASTEXITCODE -ne 0 -or -not $deriveResult) {
-        $apiPort = 3102 - $offset
-        $webPort = 5102 - $offset
+    # Load .env from worktree
+    $envFile = Join-Path $dir ".env"
+    if (Test-Path $envFile) {
+        Get-Content $envFile | ForEach-Object {
+            $line = $_.Trim()
+            if ($line -and -not $line.StartsWith("#")) {
+                $parts = $line -split "=", 2
+                if ($parts.Count -eq 2) {
+                    $key = $parts[0].Trim()
+                    $val = $parts[1].Trim().Trim('"').Trim("'")
+                    [System.Environment]::SetEnvironmentVariable($key, $val, "Process")
+                }
+            }
+        }
+        Write-Ok ".env loaded from $envFile"
     } else {
-        $parts = $deriveResult -split ' '
-        $apiPort = [int]$parts[0]
-        $webPort = [int]$parts[1]
+        Write-Warn ".env not found, deriving ports from name"
+        $offset = Get-FeatureOffset $name
+        $env:MYTEAM_ENV = "feature-$name"
+        $env:MYTEAM_API_PORT = 3102 - $offset
+        $env:MYTEAM_WEB_PORT = 5102 - $offset
+        $env:MYTEAM_DB_PATH = (Get-MyTeamDataDir -EnvName "feature-$name")
     }
 
-    $nodeBin = Get-NodeBin
-    $tsxCli = Get-TsxCli
-    $viteBin = Get-ViteBin
-
-    if (-not $tsxCli) { Write-Err "tsx not found"; exit 1 }
-    if (-not $viteBin) { Write-Err "vite not found"; exit 1 }
-
-    Stop-PortProcess -Port $apiPort -Name "Feature API"
-    Stop-PortProcess -Port $webPort -Name "Feature Web"
-
-    Write-Host "  Starting API (port $apiPort, watch mode)..."
-    $apiJob = Start-Job -Name "myteam-feature-$name-api" -ScriptBlock {
-        param($root, $nodeBin, $tsxCli, $dataDir, $apiPort, $webPort, $envName)
-        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-        $env:MYTEAM_ENV = $envName
-        $env:MYTEAM_API_PORT = $apiPort
-        $env:MYTEAM_WEB_PORT = $webPort
-        $env:MYTEAM_DB_PATH = $dataDir
-        Set-Location (Join-Path $root "packages/api")
-        & $nodeBin $tsxCli watch src/index.ts 2>&1
-    } -ArgumentList $dir, $nodeBin, $tsxCli, $dataDir, $apiPort, $webPort, $envName
-
-    Start-Sleep -Seconds 3
-
-    Write-Host "  Starting Web (port $webPort, dev mode)..."
-    $webJob = Start-Job -Name "myteam-feature-$name-web" -ScriptBlock {
-        param($root, $nodeBin, $viteBin, $apiPort, $webPort)
-        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-        $env:MYTEAM_API_PORT = $apiPort
-        $env:MYTEAM_WEB_PORT = $webPort
-        Set-Location (Join-Path $root "packages/web")
-        & $nodeBin $viteBin --port $webPort --host 2>&1
-    } -ArgumentList $dir, $nodeBin, $viteBin, $apiPort, $webPort
-
-    Start-Sleep -Seconds 3
-
-    Write-Host ""
-    Write-Host "  ========================================" -ForegroundColor Green
-    Write-Host "  myteam feature '$name' started!" -ForegroundColor Green
-    Write-Host "  ========================================" -ForegroundColor Green
-    Write-Host "  Web:  http://localhost:$webPort"
-    Write-Host "  API:  http://localhost:$apiPort"
-    Write-Host "  DB:   $dataDir"
-    Write-Host "  Dir:  $dir"
-    Write-Host ""
-    Write-Host "  Press Ctrl+C to stop" -ForegroundColor Yellow
-    Write-Host ""
-
-    $jobs = @($apiJob, $webJob)
-    try {
-        while ($true) {
-            foreach ($job in $jobs) {
-                $output = Receive-Job -Job $job -ErrorAction SilentlyContinue
-                if ($output) { $output | ForEach-Object { Write-Host $_ } }
-            }
-            $stopped = $jobs | Where-Object { $_.State -ne 'Running' }
-            if ($stopped.Count -gt 0) {
-                foreach ($job in $stopped) { Write-Warn "Job '$($job.Name)' stopped ($($job.State))" }
-                break
-            }
-            Start-Sleep -Seconds 2
-        }
-    } finally {
-        foreach ($job in $jobs) {
-            Stop-Job -Job $job -ErrorAction SilentlyContinue
-            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
-        }
-        Write-Host "`nFeature '$name' stopped." -ForegroundColor Cyan
-    }
+    # Delegate to start-dev.ps1 (runs in worktree dir, has guards)
+    $startScript = Join-Path $ScriptDir "start-dev.ps1"
+    & powershell -ExecutionPolicy Bypass -File $startScript -Quick
 }
 
 function Invoke-FeatureList {
@@ -177,14 +128,27 @@ function Invoke-FeatureList {
         $dir = $parts[0]
         $branch = $parts[2]
         $name = [System.IO.Path]::GetFileName($dir) -replace '^myteam-', ''
-        $offset = Get-FeatureOffset $name
-        $apiPort = 3102 - $offset
-        $webPort = 5102 - $offset
+
+        # Read ports from .env
+        $envFile = Join-Path $dir ".env"
+        $apiPort = $null; $webPort = $null
+        if (Test-Path $envFile) {
+            Get-Content $envFile | ForEach-Object {
+                if ($_ -match '^MYTEAM_API_PORT=(\d+)') { $apiPort = $Matches[1] }
+                if ($_ -match '^MYTEAM_WEB_PORT=(\d+)') { $webPort = $Matches[1] }
+            }
+        }
+        if (-not $apiPort -or -not $webPort) {
+            $offset = Get-FeatureOffset $name
+            $apiPort = 3102 - $offset
+            $webPort = 5102 - $offset
+        }
+
         $running = Test-PortListening -Port $apiPort
         Write-Host "  $name" -ForegroundColor $(if ($running) {'Green'} else {'Gray'})
-        Write-Host "    dir:   $dir"
+        Write-Host "    dir:    $dir"
         Write-Host "    branch: $branch"
-        Write-Host "    ports: API=$apiPort Web=$webPort"
+        Write-Host "    ports:  API=$apiPort Web=$webPort"
         Write-Host "    status: $(if ($running) {'RUNNING'} else {'stopped'})"
     }
 }
@@ -196,9 +160,20 @@ function Invoke-FeatureRemove {
     if (-not (Test-Path $dir)) { Write-Err "Feature worktree not found: $dir"; exit 1 }
 
     Write-Step "Removing feature: $name"
-    $offset = Get-FeatureOffset $name
-    $apiPort = 3102 - $offset
-    $webPort = 5102 - $offset
+    # Read ports from .env
+    $envFile = Join-Path $dir ".env"
+    $apiPort = $null; $webPort = $null
+    if (Test-Path $envFile) {
+        Get-Content $envFile | ForEach-Object {
+            if ($_ -match '^MYTEAM_API_PORT=(\d+)') { $apiPort = [int]$Matches[1] }
+            if ($_ -match '^MYTEAM_WEB_PORT=(\d+)') { $webPort = [int]$Matches[1] }
+        }
+    }
+    if (-not $apiPort -or -not $webPort) {
+        $offset = Get-FeatureOffset $name
+        $apiPort = 3102 - $offset
+        $webPort = 5102 - $offset
+    }
     Stop-PortProcess -Port $apiPort -Name "Feature API"
     Stop-PortProcess -Port $webPort -Name "Feature Web"
 

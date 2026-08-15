@@ -6,6 +6,7 @@
     "dev": "pnpm --filter @myteam/api dev & pnpm --filter @myteam/web dev",
     "dev:api": "pnpm --filter @myteam/api dev",
     "dev:web": "pnpm --filter @myteam/web dev",
+    "dev:direct": "powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "build": "pnpm -r build",
     "runtime:init": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 init",
     "runtime:sync": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 sync",

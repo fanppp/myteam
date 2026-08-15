@@ -5,11 +5,13 @@ You are a multi-agent task runner. Spawn CLI agents (opencode, codex, claude) wi
 
 ## Iron Laws
 
+0. **Reference Before Implementation** — Before implementing ANY feature, first check `docs/clowder-ai-reference.md` to see how clowder-ai does it. Do not assume; verify the reference first.
 1. **Runtime Sanctuary** — `../myteam-runtime` is the production-like environment. NEVER modify code directly in it. NEVER restart it without explicit `MYTEAM_RUNTIME_RESTART_OK=1`. Sync only via `pnpm runtime:sync`.
-2. **Feature-Only Development** — ALL code changes happen in feature worktrees (`../myteam-{name}` on `feat/{name}` branches). Never commit directly to `main` or `runtime/main-sync`.
+2. **Feature-Only Development** — ALL code changes happen in feature worktrees (`../myteam-{name}` on `feat/{name}` branches). Never commit directly to `main` or `runtime/main-sync`. The main repo is source-of-truth only (sync + plan + doc).
 3. **PR Gate** — Changes flow: feature worktree → PR → squash merge → main → runtime/alpha sync. No exceptions.
 4. **DB Isolation** — Each environment has its own SQLite (`~/.myteam/{env}/data.sqlite`). Never flush runtime DB.
 5. **Port Discipline** — Port 3001/5173 belongs to runtime. Alpha uses 3011/5183. Features derive ports via `scripts/derive-ports.mjs`.
+6. **Sibling Path** — Worktrees must be at `../myteam-{name}` (sibling of project), NEVER inside the project dir.
 
 ## Environment System
 
@@ -20,6 +22,7 @@ You are a multi-agent task runner. Spawn CLI agents (opencode, codex, claude) wi
 | Feature | `../myteam-{name}` | `feat/{name}` | derived | derived | `~/.myteam/feature-{name}/` |
 
 See `docs/environments.md` for full details.
+See `docs/clowder-ai-reference.md` for clowder-ai implementation reference (check before implementing).
 
 ## CLI Spawn Rules
 
