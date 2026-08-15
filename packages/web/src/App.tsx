@@ -330,6 +330,30 @@ export default function App() {
         >
           {loading ? '启动中...' : '执行 ▶'}
         </button>
+        {taskId && taskStatus === 'running' && (
+          <button
+            onClick={async () => {
+              if (!taskId) return;
+              try {
+                await fetch(`/api/tasks/${taskId}/cancel`, { method: 'POST' });
+                setTaskStatus('cancelled');
+                if (eventSourceRef.current) eventSourceRef.current.close();
+              } catch {}
+            }}
+            style={{
+              padding: '10px 20px',
+              background: '#ef4444',
+              border: 'none',
+              borderRadius: '8px',
+              color: 'white',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+            }}
+          >
+            中断 ✕
+          </button>
+        )}
       </div>
 
       {/* DAG 流程图区域 */}

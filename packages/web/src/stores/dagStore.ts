@@ -65,7 +65,7 @@ export const useDAGStore = create<DAGState>((set, get) => ({
 
   syncNodeStatuses: (taskStatus: string) => {
     if (taskStatus === 'running') return;
-    const fixTo = taskStatus === 'done' ? 'done' : taskStatus === 'error' ? 'error' : 'stale';
+    const fixTo = taskStatus === 'done' ? 'done' : taskStatus === 'error' ? 'error' : taskStatus === 'cancelled' ? 'cancelled' : 'stale';
     const nodes = get().nodes.map(n => {
       if (n.type === 'startNode') return n;
       const data = n.data as RoleNodeData;

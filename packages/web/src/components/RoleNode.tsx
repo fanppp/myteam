@@ -9,6 +9,7 @@ const statusColors: Record<string, string> = {
   error: '#ef4444',
   pending: '#6c7086',
   stale: '#7f1d1d',
+  cancelled: '#f59e0b',
 };
 
 const statusIcons: Record<string, string> = {
@@ -19,6 +20,7 @@ const statusIcons: Record<string, string> = {
   error: '❌',
   pending: '⏳',
   stale: '💀',
+  cancelled: '⛔',
 };
 
 const statusLabels: Record<string, string> = {
@@ -29,6 +31,7 @@ const statusLabels: Record<string, string> = {
   error: '错误',
   pending: '等待中',
   stale: '超时',
+  cancelled: '已中断',
 };
 
 function RoleNodeComponent({ data }: { data: any }) {
