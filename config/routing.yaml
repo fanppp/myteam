@@ -33,6 +33,15 @@ intent_rules:
       - "architecture"
       - "pipeline"
       - "engineer"
+      - "添加"
+      - "删除"
+      - "新增"
+      - "功能"
+      - "修改"
+      - "bug"
+      - "feature"
+      - "deploy"
+      - "部署"
     team: engineering
 
   - intent: brainstorm
