@@ -261,3 +261,169 @@ clowder-ai 的强制**绝大部分是文档**，机械强制很窄：
 **Runtime worktree 全程零修改。**
 
 但约束是**文档级**的 — agent 遵守是因为读了 AGENTS.md，不是因为系统机械阻止了它。如果 agent 不读文档或选择无视，没有任何东西阻止它直接改 runtime 代码（和 clowder-ai 一样）。
+
+## 11. 猫执行顺序与动态路由
+
+### 固定还是动态？— 动态
+
+clowder-ai **没有** `teams.yaml` 那样的固定 serial/parallel 结构。执行顺序是动态的。
+
+| myteam | clowder-ai |
+|--------|------------|
+| `teams.yaml` 预定义角色 + 顺序 | 无 teams.yaml，角色运行时从 `cat-template.json` roster 动态选 |
+| `strategy: serial/parallel` | 技能链（skill chain）定义候选下一步，猫自己选 |
+| `decision: {action: "finish/handoff"}` JSON 输出 | 文本 `@handle` + MCP 工具调用（`targetCats`, `cross_post_message`） |
+| transitions 固定条件 | 球权模型（@ = 传球，接/退/升） |
+
+### 三层动态路由
+
+**① 技能链 (manifest.yaml)**
+每个技能有 `next: []` 候选列表（不是单一后继）：
+```
+feat-lifecycle → next: ["writing-plans"]
+writing-plans → next: ["worktree"]
+quality-gate → next: ["fresh-context-review", "request-review"]  ← 多选
+```
+猫根据 `triggers` 关键词匹配，自己决定走哪个技能。
+
+**② 球权模型 (shared-rules.md §10)**
+`@handle` = 传球。收到球后只能三选一：
+
+| 选择 | 含义 |
+|------|------|
+| 接 (accept) | "我来做 X" — 拿球行动 |
+| 退 (return) | "球不该在我这，退给 @xxx" — 退回发送方 |
+| 升 (escalate) | `@operator` — 仅限 3 种硬条件：不可逆操作/愿景级决策/跨猫死锁 |
+
+没有第四种选择。`@operator` 是硬条件出口，不是默认安全港。
+
+两种路由方式：
+- 文本行首 `@handle`（同线程文本路由）— 句中 @ 无系统效果
+- MCP `targetCats`（跨线程结构化 A2A 路由）— 通过 `cross_post_message` 发送
+
+**③ 角色词动态解析**
+技能里写的是角色词（主执行猫/QA审查猫/守护猫），不是猫名。lint 规则 `no-hardcoded-cats` 禁止硬编码猫名。运行时从 `cat-config.json` roster 解析：
+- 排除 `available: false` 的猫
+- 排除 author 和 reviewer（守护猫选择时）
+- 优先跨 family
+- 优先 lead
+
+### A2A 消息状态（只有 3 种）
+
+| 状态 | 含义 |
+|------|------|
+| `BLOCKED` | 真卡住了，需要对方立刻决策 |
+| `REVIEW READY` | 到了五件套/review 边界 |
+| `DONE` / `HANDOFF` | 任务结束，交棒 |
+
+收到球后静默执行直到下一个状态转换点。中间输出留在代码/文档里，不发送。"声明 = 执行" — 说"进入 merge gate"就是同一轮做。预发检查：不是 BLOCKED/REVIEW READY/DONE → 不发 → 继续做。
+
+### 五件套交接格式
+
+跨猫交接必须包含 5 件（`cross-cat-handoff` 技能 SCAN→MISSING→BLOCK→PASS 强制）：
+
+| # | 项目 | 说明 |
+|---|------|------|
+| 1 | What | 具体改动或决策 |
+| 2 | Why | 为什么这样做（约束、风险、目标） |
+| 3 | Tradeoff | 放弃了什么备选方案 |
+| 4 | Open Questions | 还不确定的点（分技术/价值两类） |
+| 5 | Next Action | 希望接手方下一步做什么 |
+
+4 种交接类型：Review 请求 / 工作交接（中途转交）/ 决策通知 / 开放讨论邀请。
+
+## 12. 完成与结束机制
+
+### Phase 级完成
+`merge-gate` Step 7.5 → PR merge 后实时同步 Phase ✅ + AC 打勾 + Timeline。不延迟到 feature 完成。
+
+### Feature 级完成（多层终局信号）
+
+```
+① AC 全打勾
+② PR 合入 main
+③ remote review 通过
+④ 愿景守护 — 跨猫交叉验证
+   守护猫 ≠ author ≠ reviewer，从 roster 动态选，优先跨 family
+   守护猫 P1 = blocker，author 不能自己解决
+   闭环只有 2 条路：(A) 真实现，或 (B) operator 联合签字降级
+⑤ CloseGateReport — 结构化 AC 矩阵
+   每个 AC: met / deleted / cvo_signed_off
+   resolution.kind: immediate / delete / cvo_signoff（无第四种）
+   禁止: follow-up / deferred / next phase / stub / TD / 后续 / 下次一定
+⑥ 反思胶囊 — 写到 project-reflections/
+⑦ pnpm check:features PASS — 机器验证
+⑧ Status: done + 从 BACKLOG 移除
+```
+
+触发条件：AC 全打勾 + PR 合入 + remote review 通过。不触发于 phase-done 或 review-passed 单独。
+
+### CloseGateReport 格式
+
+```yaml
+ac_matrix:
+  - id: AC-1
+    description: "..."
+    status: met          # met / unmet / deleted / cvo_signed_off
+    evidence: "截图/测试输出/代码路径"
+    resolution:
+      kind: immediate    # immediate / delete / cvo_signoff
+      # 如果 cvo_signoff:
+      proposal_message_id: "..."
+      cvo_message_id: "..."
+      cvo_quote: "operator 原话"
+      accepted_scope: "..."
+```
+
+### 愿景守护三问（不可跳过）
+1. operator 的核心问题是什么？
+2. 交付的东西解决这个问题了吗？
+3. operator 用的体验如何？
+
+AC 全打勾 ≠ 完成（F041 教训：12 AC ✅ 但 UI 不可用）。
+
+## 13. Takeover（接管）机制
+
+### §18 TAKEOVER — reviewer 发起的 author 降级
+
+触发条件（任一）：
+1. 连续 3 轮无有效证据增量（新日志/新调用链/新文件+行号/新 Red→Green/scope 缩窄）
+2. 连续 2 次 "修好了/没问题" 但重新验证失败（假绿）
+3. Reviewer 被迫对同一症状/验收点重新验证 2 次
+4. 连续 2 次 "下一步做 X，ok 吗？" 的前瞻性请求，无交付物
+5. 收到球后连续 2 条非状态转换消息（中间进度报告），未进入 BLOCKED/REVIEW READY/DONE
+
+接管流程：
+1. Reviewer 显式宣布 TAKEOVER（不能默会）
+2. 原 author 立即降级为"信息提供者"，停止试错
+3. 原 author 交 4 部分手写：复现步骤/试过什么/失败原因/当前怀疑
+4. 接管猫修复 → 另一只猫 review 接管猫的代码（不能自审）
+5. 任务结束后 author 身份自动恢复（不永久）
+
+### actionFamily=takeover — 接管另一只猫的 owner 角色
+
+接管 worktree/feat owner/review 等高风险操作 → 触发 3 问验证：
+1. **claim 是什么** — 列举所有可验证声明（owner/auth/object/wait/route/role/freshness）
+2. **resolver** — 每个声明需独立验证者，标 `sourceTier`：
+   - T0：landy messageId / git 签名 / GitHub API（最强）
+   - T1：PR review/check 状态 / CI
+   - T2：猫可写文档 / feat_index / 另一只猫的声明（最弱）
+3. **verdict** — `verified` / `mismatch` / `insufficient`
+
+高风险操作（merge/cvo_claim/takeover/irreversible/owner_reassignment）需 ≥1 T0/T1 证据。T2-only → `insufficient` → fail-closed。
+
+## 14. 对比 myteam
+
+| clowder-ai | myteam | 差距 |
+|------------|--------|------|
+| 动态选猫（roster + 角色词） | 固定 team（teams.yaml） | myteam 简单但不够灵活 |
+| @ 球权传球（接/退/升） | `decision` JSON + transitions | myteam 有 handoff 条件但无球权模型 |
+| 多层终局（AC+PR+review+守护+CloseGate） | `task_done` 事件 | myteam 单层，无愿景守护 |
+| TAKEOVER 接管 | 无 | myteam 无卡住检测 |
+| A2A 3 状态（BLOCKED/REVIEW READY/DONE） | 无 | myteam 无跨猫通信协议 |
+| 五件套交接格式 | 无格式 | myteam 无交接格式约束 |
+| cloud review (@codex review) | 无 | myteam 无云端 review |
+| Red→Green TDD 修复 | 无 | myteam 无 TDD 流程 |
+| Evidence Validation E1-E5 | 无 | myteam 无 merge 前证据验证 |
+| 封板协议（5 轮上限） | 无 | myteam 无 review 循环控制 |
+| Review Continuity Guard | 无 | myteam 无 stale review 检测 |
