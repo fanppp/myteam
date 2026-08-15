@@ -31,6 +31,23 @@ See `docs/clowder-ai-reference.md` for clowder-ai implementation reference (chec
 - claude: `--permission-mode bypassPermissions --include-partial-messages --verbose` (resume: `--resume`)
 - API must run with `tsx` (NOT `tsx watch`) in runtime — watch mode kills API when CLI agents edit source files
 
+## Mechanical Enforcement
+
+- **Git hooks** (auto-installed via `postinstall`): pre-commit and pre-push reject commits/pushes on `runtime/main-sync`, `alpha/main-sync` branches and inside `myteam-runtime`/`myteam-alpha` worktree dirs. Main repo `master` is allowed (plans, docs, config).
+- **Startup guards**: `start-dev.ps1` has `Guard-MainBranchStart` (blocks dev on master) and `Guard-PortKillOwnership` (prevents cross-worktree process killing).
+- **Runtime restart guard**: `runtime-worktree.ps1` refuses restart if API is running (requires `MYTEAM_RUNTIME_RESTART_OK=1`).
+- **Limitation**: File writes (without git commit) are NOT mechanically blocked — same as clowder-ai. Agents are trusted to read AGENTS.md and comply.
+
+## Merge-Back Flow
+
+```
+feature:create → feature:start → develop+commit →
+feature:pr (push+PR) → squash merge → runtime:sync (ff-only) →
+feature:remove (cleanup) → runtime:start (restart with MYTEAM_RUNTIME_RESTART_OK=1)
+```
+
+See `docs/environments.md` § 完整开发流程 for step-by-step commands.
+
 ## Key Paths
 
 - API: port from `MYTEAM_API_PORT` env (default 3001)

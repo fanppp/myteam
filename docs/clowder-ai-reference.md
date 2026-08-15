@@ -206,14 +206,58 @@ feat-lifecycle kickoff → Design Gate → writing-plans(在 main 上)
 
 | clowder-ai 有 | myteam 状态 | 待补 |
 |--------------|------------|------|
-| `guard_main_branch_start` | 无 | 加 `start-dev.ps1` 守卫 |
-| `pnpm dev:direct` (start-dev.sh) | 无 | 加 `scripts/start-dev.ps1` |
+| `guard_main_branch_start` | ✅ `start-dev.ps1` Guard-MainBranchStart | 已有 |
+| `pnpm dev:direct` (start-dev.sh) | ✅ `scripts/start-dev.ps1` | 已有 |
 | `derive-worktree-ports.mjs` | ✅ `derive-ports.mjs` | 已有 |
 | `runtime-worktree.sh` | ✅ `runtime-worktree.ps1` | 已有 |
 | `alpha-worktree.sh` | ✅ `alpha-worktree.ps1` | 已有 |
-| worktree SKILL.md | 无 | 加文档 |
-| `guard_port_kill_ownership` | 无 | 加到 helpers |
+| worktree SKILL.md | ✅ `docs/environments.md` | 已有 |
+| `guard_port_kill_ownership` | ✅ `start-dev.ps1` Guard-PortKillOwnership | 已有 |
 | `guard_runtime_redis_sanctuary` | N/A | myteam 无 Redis |
+| `ensure_restart_authorized` | ✅ `runtime-worktree.ps1` | 已有 |
 | HEAD-keyed build stamp | 无 | 后续加 |
 | Feature doc sync | 无 | 后续加 |
-| `.env` 模板 for worktree | 无 | 加 `.env.worktree` |
+| `.env` 模板 for worktree | ✅ `feature-worktree.ps1` 自动生成 | 已有 |
+| Git pre-commit hook (默认关闭) | ✅ `.githooks/pre-commit` + postinstall 自动安装 | 已有，且更好 |
+| Git pre-push hook (文件不存在) | ✅ `.githooks/pre-push` | 已有，clowder-ai 缺失 |
+| PR 流程脚本 | ✅ `scripts/feature-pr.ps1` | 已有 |
+| `pnpm gate` 质量门禁 | 无 | 后续加 |
+| cloud review (@codex review) | N/A | myteam 无多模型 review |
+
+## 10. 机械强制 vs 文档约束（实测结论）
+
+### clowder-ai 的真相
+
+clowder-ai 的强制**绝大部分是文档**，机械强制很窄：
+
+| 机制 | 机械强制？ | 实际效果 |
+|------|-----------|---------|
+| `guard_main_branch_start` | ✅ 但只拦 dev server 启动 | CLI agent 写文件不经过这个 |
+| `guard_port_kill_ownership` | ✅ 但只在启动脚本里 | 防 worktree 互杀进程 |
+| `ensure_restart_authorized` | ✅ | 防 runtime 被意外重启 |
+| Git `pre-commit` hook | ⚠️ 默认关闭 | 需手动 `pnpm guards:install` |
+| Git `pre-push` hook | ❌ 文件不存在 | 文档说有但磁盘上没有 |
+| 防止 CLI agent 写 runtime | ❌ 纯文档 | 靠 agent 读 SKILL.md 自觉 |
+| 文件系统只读 | ❌ 没有 | runtime worktree 是普通权限 |
+
+### myteam 的改进
+
+| clowder-ai | myteam | 改进点 |
+|------------|--------|--------|
+| pre-commit 默认关闭 | ✅ `postinstall` 自动安装 | 新 worktree 自动生效 |
+| pre-push 不存在 | ✅ 有 pre-push hook | 拦截 protected 分支 push |
+| runtime 分支提交无拦截 | ✅ pre-commit 拦截 `runtime/main-sync` | 机械阻止 |
+| 无 PR 自动化 | ✅ `pnpm feature:pr` | 一键 push + create + merge + cleanup |
+| 防止 CLI agent 写 runtime = 纯文档 | 同样靠文档（AGENTS.md） | 文件级拦截需 OS ACL，成本高 |
+
+### 实测结果（2026-08-15）
+
+通过 Runtime 发送"帮我添加功能：左边的会话可以删除"消息，engineering 团队（architect→implementer→reviewer）执行：
+
+1. **Architect (opencode)**: 读 AGENTS.md → 写方案文档到 main repo → 没碰 runtime ✅
+2. **Implementer (codex)**: 自己创建 `../myteam-delete-session` worktree (`feat/delete-session` 分支) → 在 feature worktree 里改了 4 个文件 +137 行 → 跑 tsc + SQLite 测试 → 没碰 runtime ✅
+3. **Reviewer (codex)**: 在 feature worktree 里 review diff → 发现 P1 竞态 → 没碰 runtime ✅
+
+**Runtime worktree 全程零修改。**
+
+但约束是**文档级**的 — agent 遵守是因为读了 AGENTS.md，不是因为系统机械阻止了它。如果 agent 不读文档或选择无视，没有任何东西阻止它直接改 runtime 代码（和 clowder-ai 一样）。
