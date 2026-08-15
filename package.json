@@ -6,7 +6,20 @@
     "dev": "pnpm --filter @myteam/api dev & pnpm --filter @myteam/web dev",
     "dev:api": "pnpm --filter @myteam/api dev",
     "dev:web": "pnpm --filter @myteam/web dev",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "runtime:init": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 init",
+    "runtime:sync": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 sync",
+    "runtime:start": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 start",
+    "runtime:status": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 status",
+    "runtime:stop": "powershell -ExecutionPolicy Bypass -File scripts/runtime-worktree.ps1 stop",
+    "alpha:init": "powershell -ExecutionPolicy Bypass -File scripts/alpha-worktree.ps1 init",
+    "alpha:sync": "powershell -ExecutionPolicy Bypass -File scripts/alpha-worktree.ps1 sync",
+    "alpha:start": "powershell -ExecutionPolicy Bypass -File scripts/alpha-worktree.ps1 start",
+    "alpha:status": "powershell -ExecutionPolicy Bypass -File scripts/alpha-worktree.ps1 status",
+    "feature:create": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 create",
+    "feature:start": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 start",
+    "feature:list": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 list",
+    "feature:remove": "powershell -ExecutionPolicy Bypass -File scripts/feature-worktree.ps1 remove"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]

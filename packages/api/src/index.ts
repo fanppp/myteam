@@ -9,13 +9,16 @@ import { AppDatabase } from './storage/Database.js';
 import { TaskRuntime } from './executor/TaskRuntime.js';
 import { Router } from './router/Router.js';
 
-const PORT = Number(process.env.PORT ?? 3001);
+const PORT = Number(process.env.MYTEAM_API_PORT ?? process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? '127.0.0.1';
 
 const configDir = resolve(process.cwd(), 'config');
 const config = new ConfigLoader(configDir);
 
-const dataDir = resolve(homedir(), '.myteam');
+const envName = process.env.MYTEAM_ENV ?? 'default';
+const dataDir = process.env.MYTEAM_DB_PATH
+  ? resolve(process.env.MYTEAM_DB_PATH)
+  : resolve(homedir(), '.myteam', envName !== 'default' ? envName : '');
 if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 const dbPath = resolve(dataDir, 'data.sqlite');
 const db = new AppDatabase(dbPath);
@@ -147,7 +150,7 @@ fastify.listen({ port: PORT, host: HOST }, (err, address) => {
     console.error(err);
     process.exit(1);
   }
-  console.log(`API server: ${address}`);
-  console.log(`Data dir: ${dataDir}`);
-  console.log(`Config dir: ${configDir}`);
+  console.log(`[myteam] env=${envName} port=${PORT}`);
+  console.log(`[myteam] db=${dbPath}`);
+  console.log(`[myteam] config=${configDir}`);
 });
