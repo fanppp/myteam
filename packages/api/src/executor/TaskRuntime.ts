@@ -58,8 +58,12 @@ export class TaskRuntime {
       } else {
         await this.executeSerial(plan, message, worktreePath, controller.signal, sessionId);
       }
-      this.emit('task_done', taskId, undefined, 'final', { status: 'done' });
-      this.db.updateTaskStatus(taskId, 'done');
+      if (controller.signal.aborted) {
+        this.emit('task_done', taskId, undefined, 'final', { status: 'cancelled' });
+      } else {
+        this.emit('task_done', taskId, undefined, 'final', { status: 'done' });
+        this.db.updateTaskStatus(taskId, 'done');
+      }
     } catch (err: any) {
       this.emit('node_error', taskId, undefined, 'final', { content: err?.message ?? String(err), status: 'error' });
       this.emit('task_done', taskId, undefined, 'final', { status: 'error' });

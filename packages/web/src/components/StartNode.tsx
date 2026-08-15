@@ -3,22 +3,41 @@ import { Handle, Position } from '@xyflow/react';
 import { useDAGStore } from '../stores/dagStore';
 
 function StartNodeComponent({ data }: { data: any }) {
-  const [editText, setEditText] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [input, setInput] = useState('');
+  const [aborting, setAborting] = useState(false);
   const taskStatus = useDAGStore((s) => s.taskStatus);
-  const isDone = taskStatus === 'done' || taskStatus === 'error';
+  const taskId = useDAGStore((s) => s.taskId);
+  const setTaskStatus = useDAGStore((s) => s.setTaskStatus);
+  const syncNodeStatuses = useDAGStore((s) => s.syncNodeStatuses);
+
+  const isRunning = taskStatus === 'running';
   const history: any[] = data.history || [];
   const onContinue = data.onContinue;
   const sessionId = data.sessionId;
   const teamId = data.teamId;
 
-  const handleContinue = () => {
-    const msg = editText.trim() || (data.content as string);
-    if (onContinue && sessionId && msg) {
-      onContinue(msg, sessionId, teamId || '');
-      setEditText('');
-      setIsEditing(false);
+  const handleSend = () => {
+    const msg = input.trim();
+    if (!msg || !onContinue || !sessionId) return;
+    onContinue(msg, sessionId, teamId || '');
+    setInput('');
+  };
+
+  const handleAbort = async () => {
+    if (!taskId || aborting) return;
+    setAborting(true);
+    try {
+      await fetch(`/api/tasks/${taskId}/cancel`, { method: 'POST' });
+      setTaskStatus('cancelled');
+      syncNodeStatuses('cancelled');
+    } catch {}
+    setAborting(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
@@ -56,32 +75,24 @@ function StartNodeComponent({ data }: { data: any }) {
           )}
         </div>
         {history.length > 0 && (
-          <button
-            onClick={() => setShowHistory(!showHistory)}
-            style={{
-              padding: '2px 8px',
-              background: showHistory ? '#a855f733' : 'transparent',
-              border: '1px solid #a855f744',
-              borderRadius: '4px',
-              color: '#a855f7',
-              fontSize: '11px',
-              cursor: 'pointer',
-            }}
-          >
-            {showHistory ? '◀ 收起' : `历史 (${history.length})`}
-          </button>
+          <span style={{ fontSize: '10px', color: '#6c7086' }}>
+            {history.length} 轮对话
+          </span>
         )}
       </div>
 
-      {showHistory && history.length > 0 && (
+      {history.length > 0 && (
         <div
           className="nodrag nowheel"
           style={{
-            maxHeight: '200px',
+            height: '150px',
             overflow: 'auto',
             borderBottom: '1px solid #313244',
             background: '#181825',
+            userSelect: 'text',
+            cursor: 'text',
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
           {history.map((h, i) => (
             <div
@@ -98,123 +109,103 @@ function StartNodeComponent({ data }: { data: any }) {
                 fontSize: '10px',
                 padding: '1px 5px',
                 borderRadius: '3px',
-                background: h.status === 'done' ? '#22c55e22' : h.status === 'error' ? '#ef444422' : '#3b82f622',
-                color: h.status === 'done' ? '#22c55e' : h.status === 'error' ? '#ef4444' : '#3b82f6',
+                background: h.status === 'done' ? '#22c55e22' : h.status === 'error' ? '#ef444422' : h.status === 'cancelled' ? '#f59e0b22' : '#3b82f622',
+                color: h.status === 'done' ? '#22c55e' : h.status === 'error' ? '#ef4444' : h.status === 'cancelled' ? '#f59e0b' : '#3b82f6',
                 marginRight: '6px',
-              }}>{h.status}</span>
-              {h.message.length > 80 ? h.message.slice(0, 80) + '...' : h.message}
+              }}>{h.status === 'cancelled' ? '中断' : h.status === 'done' ? '完成' : h.status === 'error' ? '错误' : h.status}</span>
+              {h.message.length > 100 ? h.message.slice(0, 100) + '...' : h.message}
             </div>
           ))}
         </div>
       )}
 
-      <div
-        className="nodrag nowheel"
-        style={{
-          padding: '10px 14px',
-          fontSize: '13px',
-          lineHeight: '1.5',
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        {isEditing && isDone ? (
-          <textarea
-            autoFocus
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleContinue();
-            }}
-            placeholder="输入续会话消息..."
-            style={{
-              width: '100%',
-              minHeight: '60px',
-              background: '#181825',
-              border: '1px solid #a855f744',
-              borderRadius: '6px',
-              color: '#cdd6f4',
-              fontSize: '13px',
-              padding: '8px',
-              outline: 'none',
-              resize: 'vertical',
-              boxSizing: 'border-box',
-            }}
-          />
-        ) : (
-          <div
-            onClick={() => {
-              if (isDone) {
-                setEditText(data.content || '');
-                setIsEditing(true);
-              }
-            }}
-            style={{
-              cursor: isDone ? 'text' : 'default',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              userSelect: 'text',
-            }}
-          >
-            {data.content || '(空)'}
-          </div>
-        )}
-      </div>
-
-      {isDone && onContinue && sessionId && (
+      {data.content && (
         <div
-          className="nodrag"
+          className="nodrag nowheel"
           style={{
-            padding: '6px 14px',
-            borderTop: '1px solid #313244',
-            display: 'flex',
-            gap: '8px',
-            justifyContent: 'flex-end',
+            padding: '8px 14px',
+            fontSize: '13px',
+            lineHeight: '1.5',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            userSelect: 'text',
+            cursor: 'text',
+            borderBottom: '1px solid #313244',
           }}
+          onMouseDown={(e) => e.stopPropagation()}
         >
-          {isEditing ? (
-            <>
-              <button
-                onClick={() => { setIsEditing(false); setEditText(''); }}
-                style={{
-                  padding: '4px 12px',
-                  background: 'transparent',
-                  border: '1px solid #45475a',
-                  borderRadius: '6px',
-                  color: '#7f849c',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
-              >取消</button>
-              <button
-                onClick={handleContinue}
-                style={{
-                  padding: '4px 12px',
-                  background: '#a855f7',
-                  border: 'none',
-                  borderRadius: '6px',
-                  color: 'white',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >续会话 ▶</button>
-            </>
-          ) : (
-            <button
-              onClick={() => { setEditText(data.content || ''); setIsEditing(true); }}
-              style={{
-                padding: '4px 12px',
-                background: '#a855f718',
-                border: '1px solid #a855f744',
-                borderRadius: '6px',
-                color: '#a855f7',
-                fontSize: '12px',
-                cursor: 'pointer',
-              }}
-            >编辑并续会话</button>
-          )}
+          {data.content}
         </div>
       )}
+
+      <div
+        className="nodrag"
+        style={{
+          padding: '8px 14px',
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'flex-end',
+        }}
+      >
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="输入消息... (Enter发送, Ctrl+Enter换行)"
+          rows={1}
+          style={{
+            flex: 1,
+            minHeight: '36px',
+            maxHeight: '120px',
+            background: '#181825',
+            border: '1px solid #45475a',
+            borderRadius: '6px',
+            color: '#cdd6f4',
+            fontSize: '13px',
+            padding: '8px',
+            outline: 'none',
+            resize: 'none',
+            boxSizing: 'border-box',
+          }}
+        />
+        {isRunning ? (
+          <button
+            onClick={handleAbort}
+            disabled={aborting}
+            style={{
+              padding: '8px 14px',
+              background: aborting ? '#7f1d1d' : '#ef4444',
+              border: 'none',
+              borderRadius: '6px',
+              color: 'white',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: aborting ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {aborting ? '中止中...' : '中止 ✕'}
+          </button>
+        ) : (
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || !onContinue || !sessionId}
+            style={{
+              padding: '8px 14px',
+              background: !input.trim() || !sessionId ? '#45475a' : '#a855f7',
+              border: 'none',
+              borderRadius: '6px',
+              color: 'white',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: !input.trim() || !sessionId ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            发送 ▶
+          </button>
+        )}
+      </div>
 
       <Handle type="source" position={Position.Right} style={{ background: '#a855f7' }} />
     </div>
