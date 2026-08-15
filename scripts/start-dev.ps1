@@ -78,9 +78,9 @@ function Guard-PortKillOwnership {
 # -- Main --
 Guard-MainBranchStart
 
-$envName = $env:MYTEAM_ENV ?? 'default'
-$apiPort = [int]($env:MYTEAM_API_PORT ?? 3001)
-$webPort = [int]($env:MYTEAM_WEB_PORT ?? 5173)
+$envName = if ($env:MYTEAM_ENV) { $env:MYTEAM_ENV } else { 'default' }
+$apiPort = [int]$(if ($env:MYTEAM_API_PORT) { $env:MYTEAM_API_PORT } else { 3001 })
+$webPort = [int]$(if ($env:MYTEAM_WEB_PORT) { $env:MYTEAM_WEB_PORT } else { 5173 })
 $dataDir = $env:MYTEAM_DB_PATH
 if (-not $dataDir) { $dataDir = (Get-MyTeamDataDir -EnvName $envName) }
 
