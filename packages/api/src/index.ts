@@ -1,8 +1,9 @@
 import Fastify from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { mkdirSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { hello } from '@myteam/shared';
 import { ConfigLoader } from './config/ConfigLoader.js';
 import { AppDatabase } from './storage/Database.js';
@@ -12,7 +13,10 @@ import { Router } from './router/Router.js';
 const PORT = Number(process.env.MYTEAM_API_PORT ?? process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? '127.0.0.1';
 
-const configDir = resolve(process.cwd(), 'config');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+let configDir = resolve(process.cwd(), 'config');
+if (!existsSync(configDir)) configDir = resolve(__dirname, '..', '..', 'config');
 const config = new ConfigLoader(configDir);
 
 const envName = process.env.MYTEAM_ENV ?? 'default';

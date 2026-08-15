@@ -120,7 +120,7 @@ function Invoke-RuntimeStart {
         $env:MYTEAM_API_PORT = $ApiPort
         $env:MYTEAM_WEB_PORT = $WebPort
         Set-Location (Join-Path $root "packages/web")
-        & $nodeBin $viteBin preview --port $WebPort --host 2>&1
+        & $nodeBin $viteBin --port $WebPort --host 2>&1
     } -ArgumentList $RuntimeDir, $nodeBin, $viteBin, $ApiPort, $WebPort
 
     Start-Sleep -Seconds 3
