@@ -9,6 +9,7 @@ interface RoleNodeData {
   toolName?: string;
   teamStrengths?: string;
   caution?: string | null;
+  sessionId?: string;
 }
 
 interface StartNodeData {
@@ -101,6 +102,7 @@ export const useDAGStore = create<DAGState>((set, get) => ({
           cli: role.cli,
           teamStrengths: role.team_strengths,
           caution: role.caution,
+          sessionId: sessionId || '',
         } as RoleNodeData,
       };
     });

@@ -1,5 +1,12 @@
-import { memo } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
+
+interface HistoricalOutput {
+  taskId: string;
+  message: string;
+  status: string;
+  content: string;
+}
 
 const statusColors: Record<string, string> = {
   running: '#3b82f6',
@@ -35,6 +42,10 @@ const statusLabels: Record<string, string> = {
 };
 
 function RoleNodeComponent({ data }: { data: any }) {
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyOutputs, setHistoryOutputs] = useState<HistoricalOutput[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   const color = statusColors[data.status] ?? '#6c7086';
   const icon = statusIcons[data.status] ?? '⏳';
   const label = statusLabels[data.status] ?? data.status;
@@ -42,9 +53,36 @@ function RoleNodeComponent({ data }: { data: any }) {
   const isRunning = data.status === 'running';
   const isThinking = data.status === 'thinking';
   const isActive = isRunning || isThinking;
+  const sessionId = data.sessionId;
+  const roleId = data.roleId;
+
+  const fetchHistory = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/outputs`);
+      const tasks = await res.json();
+      const filtered: HistoricalOutput[] = [];
+      for (const t of tasks) {
+        const out = t.outputs?.find((o: any) => o.roleId === roleId);
+        if (out && out.content) {
+          filtered.push({ taskId: t.taskId, message: t.message, status: t.status, content: out.content });
+        }
+      }
+      setHistoryOutputs(filtered);
+    } catch {}
+  }, [sessionId, roleId]);
+
+  const toggleHistory = () => {
+    if (!showHistory && historyOutputs.length === 0) {
+      setLoadingHistory(true);
+      fetchHistory().finally(() => setLoadingHistory(false));
+    }
+    setShowHistory(!showHistory);
+  };
 
   const contentLines = (data.content || '').split('\n');
   const hasContent = contentLines.length > 0 && contentLines[0] !== '';
+  const hasHistory = historyOutputs.length > 0;
 
   return (
     <div
@@ -126,6 +164,24 @@ function RoleNodeComponent({ data }: { data: any }) {
           )}
           {label}
         </span>
+        {sessionId && !isPending && (
+          <button
+            onClick={toggleHistory}
+            className="nodrag"
+            style={{
+              fontSize: '10px',
+              padding: '1px 6px',
+              borderRadius: '4px',
+              background: showHistory ? `${color}33` : '#313244',
+              color: showHistory ? color : '#7f849c',
+              border: `1px solid ${color}33`,
+              cursor: 'pointer',
+              marginLeft: '4px',
+            }}
+          >
+            {showHistory ? '收起' : '历史'}
+          </button>
+        )}
       </div>
 
       {/* 工具调用栏 */}
@@ -200,6 +256,57 @@ function RoleNodeComponent({ data }: { data: any }) {
             : isActive
               ? '正在思考...'
               : ''}
+        </div>
+      )}
+
+      {/* 历史输出面板 */}
+      {showHistory && (
+        <div
+          className="nodrag nowheel"
+          style={{
+            maxHeight: '300px',
+            overflow: 'auto',
+            background: '#11111b',
+            borderTop: `1px solid ${color}33`,
+            userSelect: 'text',
+            cursor: 'text',
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {loadingHistory ? (
+            <div style={{ padding: '10px 14px', fontSize: '11px', color: '#7f849c' }}>加载中...</div>
+          ) : hasHistory ? (
+            historyOutputs.map((h, i) => (
+              <div key={i} style={{ padding: '6px 14px', borderBottom: '1px solid #31324444' }}>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{
+                    fontSize: '9px', padding: '1px 5px', borderRadius: '3px',
+                    background: h.status === 'done' ? '#22c55e22' : h.status === 'error' ? '#ef444422' : h.status === 'cancelled' ? '#f59e0b22' : '#3b82f622',
+                    color: h.status === 'done' ? '#22c55e' : h.status === 'error' ? '#ef4444' : h.status === 'cancelled' ? '#f59e0b' : '#3b82f6',
+                  }}>{h.status === 'cancelled' ? '中断' : h.status === 'done' ? '完成' : h.status === 'error' ? '错误' : h.status}</span>
+                  <span style={{ fontSize: '10px', color: '#6c7086', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {h.message.length > 60 ? h.message.slice(0, 60) + '...' : h.message}
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: '11px',
+                  color: '#9399b2',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  lineHeight: '1.4',
+                  maxHeight: '100px',
+                  overflow: 'auto',
+                  background: '#181825',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                }}>
+                  {h.content.length > 300 ? h.content.slice(0, 300) + '...' : h.content}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div style={{ padding: '10px 14px', fontSize: '11px', color: '#7f849c' }}>无历史输出</div>
+          )}
         </div>
       )}
 
