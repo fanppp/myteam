@@ -1,14 +1,19 @@
-import { memo, useState } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { useDAGStore } from '../stores/dagStore';
 
 function StartNodeComponent({ data }: { data: any }) {
   const [input, setInput] = useState('');
   const [aborting, setAborting] = useState(false);
+  const historyRef = useRef<HTMLDivElement>(null);
   const taskStatus = useDAGStore((s) => s.taskStatus);
   const taskId = useDAGStore((s) => s.taskId);
   const setTaskStatus = useDAGStore((s) => s.setTaskStatus);
   const syncNodeStatuses = useDAGStore((s) => s.syncNodeStatuses);
+
+  useEffect(() => {
+    if (historyRef.current) historyRef.current.scrollTop = 0;
+  }, [data.history]);
 
   const isRunning = taskStatus === 'running';
   const history: any[] = data.history || [];
@@ -83,6 +88,7 @@ function StartNodeComponent({ data }: { data: any }) {
 
       {history.length > 0 && (
         <div
+          ref={historyRef}
           className="nodrag nowheel"
           style={{
             height: '150px',

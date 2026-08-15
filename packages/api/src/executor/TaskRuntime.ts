@@ -130,7 +130,7 @@ export class TaskRuntime {
       }
 
       this.emit('node_complete', plan.taskId, role.id, attemptId, {
-        nodeId, status: 'done',
+        nodeId, status: signal.aborted ? 'cancelled' : 'done',
       });
 
       currentInput = outputText || currentInput;
@@ -169,7 +169,7 @@ export class TaskRuntime {
       }
 
       this.emit('node_complete', plan.taskId, role.id, attemptId, {
-        nodeId, status: 'done',
+        nodeId, status: signal.aborted ? 'cancelled' : 'done',
       });
 
       results[role.id] = outputText;
@@ -206,7 +206,7 @@ export class TaskRuntime {
       }
 
       this.emit('node_complete', plan.taskId, synthesizer.id, attemptId, {
-        nodeId, status: 'done',
+        nodeId, status: signal.aborted ? 'cancelled' : 'done',
       });
     }
   }
