@@ -124,6 +124,11 @@ fastify.get('/api/sessions/:sessionId/tasks', async (request) => {
   return db.getTaskListBySession(sessionId);
 });
 
+fastify.get('/api/sessions/:sessionId/outputs', async (request) => {
+  const sessionId = (request.params as any).sessionId;
+  return db.getSessionOutputs(sessionId);
+});
+
 fastify.get('/health', async () => ({ status: 'ok' }));
 
 fastify.get('/api/hello', async (request) => {

@@ -139,4 +139,36 @@ export class AppDatabase {
     ).all(sessionId) as any[];
     return rows.map(r => ({ taskId: r.id, message: r.message, status: r.status, createdAt: r.created_at }));
   }
+
+  getSessionOutputs(sessionId: string): Array<{
+    taskId: string; message: string; status: string; createdAt: number;
+    outputs: Array<{ roleId: string; cli: string; content: string }>;
+  }> {
+    const tasks = this.db.prepare(
+      `SELECT t.id, t.message, ts.status, t.created_at FROM tasks t JOIN task_states ts ON t.id = ts.task_id WHERE t.session_id = ? ORDER BY t.created_at ASC`
+    ).all(sessionId) as any[];
+
+    return tasks.map(t => {
+      const events = this.db.prepare(
+        `SELECT role_id, type, content, cli, node_id FROM events WHERE task_id = ? AND type = 'text' ORDER BY event_id ASC`
+      ).all(t.id) as any[];
+
+      const roleMap = new Map<string, { content: string; cli: string }>();
+      for (const e of events) {
+        const key = e.role_id ?? e.node_id ?? 'unknown';
+        if (!roleMap.has(key)) roleMap.set(key, { content: '', cli: e.cli ?? '' });
+        const entry = roleMap.get(key)!;
+        if (e.content) entry.content += e.content;
+        if (e.cli && !entry.cli) entry.cli = e.cli;
+      }
+
+      return {
+        taskId: t.id,
+        message: t.message,
+        status: t.status,
+        createdAt: t.created_at,
+        outputs: Array.from(roleMap.entries()).map(([roleId, v]) => ({ roleId, cli: v.cli, content: v.content })),
+      };
+    });
+  }
 }
