@@ -14,6 +14,7 @@ export default function App() {
   const [selectedTeam, setSelectedTeam] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [taskList, setTaskList] = useState<any[]>([]);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
   const [viewport] = useState(() => {
     try {
       const saved = localStorage.getItem('dagViewport');
@@ -79,7 +80,10 @@ export default function App() {
         return { ...t, status: l?.status || t.status, createdAt: l?.createdAt || t.createdAt };
       }).sort((a, b) => b.createdAt - a.createdAt);
       setTaskList(deduped);
-    } catch {}
+      return deduped;
+    } catch {
+      return [];
+    }
   }, []);
 
   const restoreTask = async (tid: string) => {
@@ -117,6 +121,40 @@ export default function App() {
         connectSSE(tid);
       }
     } catch {}
+  };
+
+  const handleDelete = async (e: React.MouseEvent, task: any) => {
+    e.stopPropagation();
+    if (!window.confirm('确定删除此会话？所有相关历史将被永久删除。')) return;
+
+    const endpoint = task.sessionId
+      ? `/api/sessions/${encodeURIComponent(task.sessionId)}`
+      : `/api/tasks/${encodeURIComponent(task.taskId)}`;
+    const wasCurrent = task.sessionId
+      ? sessionId === task.sessionId
+      : localStorage.getItem('currentTaskId') === task.taskId;
+
+    try {
+      const response = await fetch(endpoint, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`Delete failed (${response.status})`);
+
+      if (wasCurrent) {
+        eventSourceRef.current?.close();
+        eventSourceRef.current = null;
+        localStorage.removeItem('currentTaskId');
+        reset();
+        setSessionId('');
+        setSelectedTeam('');
+      }
+
+      const remaining = await loadTaskList();
+      if (wasCurrent && remaining.length > 0) {
+        localStorage.setItem('currentTaskId', remaining[0].taskId);
+        await restoreTask(remaining[0].taskId);
+      }
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+    }
   };
 
   const connectSSE = useCallback((tid: string) => {
@@ -251,8 +289,8 @@ export default function App() {
               flexDirection: 'column',
               gap: '4px',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#31324422'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = sessionId === (t.sessionId || t.taskId) ? '#31324433' : 'transparent'; }}
+            onMouseEnter={(e) => { setHoveredKey(t.sessionId || t.taskId); e.currentTarget.style.background = '#31324422'; }}
+            onMouseLeave={(e) => { setHoveredKey(null); e.currentTarget.style.background = sessionId === (t.sessionId || t.taskId) ? '#31324433' : 'transparent'; }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{
@@ -262,7 +300,28 @@ export default function App() {
                 background: t.status === 'done' ? '#22c55e22' : t.status === 'error' ? '#ef444422' : '#3b82f622',
                 color: t.status === 'done' ? '#22c55e' : t.status === 'error' ? '#ef4444' : '#3b82f6',
               }}>{t.status}</span>
-              <span style={{ fontSize: '10px', color: '#6c7086' }}>{t.teamId}</span>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ fontSize: '10px', color: '#6c7086' }}>{t.teamId}</span>
+                <button
+                  type="button"
+                  onClick={(e) => handleDelete(e, t)}
+                  aria-label="删除会话"
+                  title="删除会话"
+                  style={{
+                    marginLeft: '8px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    color: '#6c7086',
+                    fontSize: '14px',
+                    lineHeight: 1,
+                    opacity: hoveredKey === (t.sessionId || t.taskId) ? 1 : 0,
+                    transition: 'opacity 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.color = '#ef4444'; }}
+                  onMouseLeave={(e) => { e.stopPropagation(); e.currentTarget.style.color = '#6c7086'; }}
+                >×</button>
+              </div>
             </div>
             <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {t.message}

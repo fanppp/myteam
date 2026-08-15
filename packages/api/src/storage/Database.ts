@@ -140,6 +140,40 @@ export class AppDatabase {
     return rows.map(r => ({ taskId: r.id, message: r.message, status: r.status, createdAt: r.created_at }));
   }
 
+  deleteSession(sessionId: string): number {
+    this.db.exec('BEGIN');
+    try {
+      const rows = this.db.prepare('SELECT id FROM tasks WHERE session_id = ?').all(sessionId) as Array<{ id: string }>;
+      const taskIds = rows.map(row => row.id);
+
+      if (taskIds.length > 0) {
+        const placeholders = taskIds.map(() => '?').join(',');
+        this.db.prepare(`DELETE FROM events WHERE task_id IN (${placeholders})`).run(...taskIds);
+        this.db.prepare(`DELETE FROM task_states WHERE task_id IN (${placeholders})`).run(...taskIds);
+      }
+      this.db.prepare('DELETE FROM tasks WHERE session_id = ?').run(sessionId);
+      this.db.prepare('DELETE FROM sessions WHERE session_id = ?').run(sessionId);
+      this.db.exec('COMMIT');
+      return taskIds.length;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  deleteTask(taskId: string): void {
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM events WHERE task_id = ?').run(taskId);
+      this.db.prepare('DELETE FROM task_states WHERE task_id = ?').run(taskId);
+      this.db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   getSessionOutputs(sessionId: string): Array<{
     taskId: string; message: string; status: string; createdAt: number;
     outputs: Array<{ roleId: string; cli: string; content: string }>;

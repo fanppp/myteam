@@ -14,6 +14,7 @@ export class TaskRuntime {
   private db: AppDatabase;
   private sseClients: Map<string, Set<SSEClient>> = new Map();
   private activeControllers: Map<string, AbortController> = new Map();
+  private deletedTasks = new Set<string>();
 
   constructor(db: AppDatabase) {
     this.db = db;
@@ -38,7 +39,8 @@ export class TaskRuntime {
     }
   }
 
-  private emit(type: DAGEventType, taskId: string, roleId: string | undefined, attemptId: string, extra: Partial<TaskEvent> = {}): TaskEvent {
+  private emit(type: DAGEventType, taskId: string, roleId: string | undefined, attemptId: string, extra: Partial<TaskEvent> = {}): TaskEvent | null {
+    if (this.deletedTasks.has(taskId)) return null;
     const event = this.db.appendEvent({
       taskId, roleId, attemptId, type, epoch: this.db.epoch,
       ...extra,
@@ -70,7 +72,27 @@ export class TaskRuntime {
       this.db.updateTaskStatus(taskId, 'error');
     } finally {
       this.activeControllers.delete(taskId);
+      this.deletedTasks.delete(taskId);
     }
+  }
+
+  markTaskDeleted(taskId: string) {
+    if (this.activeControllers.has(taskId)) {
+      this.deletedTasks.add(taskId);
+      this.cancelTask(taskId);
+    }
+    this.closeSSEClients(taskId);
+  }
+
+  private closeSSEClients(taskId: string) {
+    const clients = this.sseClients.get(taskId);
+    if (!clients) return;
+    for (const client of clients) {
+      try {
+        client.res.end();
+      } catch {}
+    }
+    this.sseClients.delete(taskId);
   }
 
   cancelTask(taskId: string) {
@@ -115,7 +137,7 @@ export class TaskRuntime {
         if (ev.type === 'text') outputText += ev.content;
       }, resumeSessionId);
 
-      if (result.sessionId) {
+      if (result.sessionId && !signal.aborted) {
         this.db.setCliSessionId(sessionId, role.id, result.sessionId);
       }
 
@@ -164,7 +186,7 @@ export class TaskRuntime {
         if (ev.type === 'text') outputText += ev.content;
       }, resumeSessionId);
 
-      if (result.sessionId) {
+      if (result.sessionId && !signal.aborted) {
         this.db.setCliSessionId(sessionId, role.id, result.sessionId);
       }
 
@@ -201,7 +223,7 @@ export class TaskRuntime {
         }
       }, synthResumeId);
 
-      if (result.sessionId) {
+      if (result.sessionId && !signal.aborted) {
         this.db.setCliSessionId(sessionId, synthesizer.id, result.sessionId);
       }
 

@@ -110,6 +110,23 @@ fastify.post('/api/tasks/:id/cancel', async (request, reply) => {
   reply.send({ ok: true });
 });
 
+fastify.delete('/api/sessions/:sessionId', async (request, reply) => {
+  const sessionId = (request.params as any).sessionId;
+  const tasks = db.getTaskListBySession(sessionId);
+  for (const task of tasks) {
+    runtime.markTaskDeleted(task.taskId);
+  }
+  const deletedTasks = db.deleteSession(sessionId);
+  reply.send({ ok: true, deletedTasks });
+});
+
+fastify.delete('/api/tasks/:taskId', async (request, reply) => {
+  const taskId = (request.params as any).taskId;
+  runtime.markTaskDeleted(taskId);
+  db.deleteTask(taskId);
+  reply.send({ ok: true });
+});
+
 fastify.get('/api/tasks/:id', async (request, reply) => {
   const taskId = (request.params as any).id;
   const status = db.getTaskStatus(taskId);
