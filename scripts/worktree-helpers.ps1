@@ -33,8 +33,8 @@ function Get-ViteBin {
 
 function Get-MyTeamDataDir {
     param([string]$EnvName)
-    $home = [System.Environment]::GetFolderPath('UserProfile')
-    $base = Join-Path $home ".myteam"
+    $userHome = [System.Environment]::GetFolderPath('UserProfile')
+    $base = Join-Path $userHome ".myteam"
     if ($EnvName -and $EnvName -ne 'default') {
         $dir = Join-Path $base $EnvName
     } else {
