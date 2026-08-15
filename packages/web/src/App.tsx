@@ -70,7 +70,7 @@ export default function App() {
               history = await histRes.json();
             } catch {}
           }
-          initTeam(tid, team.roles, team.strategy, data.message, data.sessionId, history, continueSession);
+          initTeam(tid, team.roles, team.strategy, data.message, data.sessionId, history, continueSession, data.teamId);
         } else {
           setTask(tid);
         }
@@ -114,7 +114,7 @@ export default function App() {
     };
   }, [handleEvent, setTaskStatus, loadTaskList]);
 
-  const continueSession = useCallback(async (newMessage: string, sid: string) => {
+  const continueSession = useCallback(async (newMessage: string, sid: string, tid: string) => {
     if (!newMessage.trim() || !sid) return;
     setLoading(true);
     reset();
@@ -122,7 +122,7 @@ export default function App() {
     try {
       const body: any = { message: newMessage, sessionId: sid };
       body.workdir = 'D:\\000agent\\opensource\\myteam';
-      if (selectedTeam) body.teamId = selectedTeam;
+      if (tid) body.teamId = tid;
 
       const res = await fetch('/api/tasks', {
         method: 'POST',
@@ -142,7 +142,7 @@ export default function App() {
           history = await histRes.json();
         } catch {}
         if (team.roles) {
-          initTeam(data.taskId, team.roles, team.strategy, newMessage, sid, history, continueSession);
+          initTeam(data.taskId, team.roles, team.strategy, newMessage, sid, history, continueSession, data.teamId);
         }
         connectSSE(data.taskId);
         loadTaskList();
@@ -152,7 +152,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [selectedTeam, reset, initTeam, connectSSE, loadTaskList]);
+  }, [reset, initTeam, connectSSE, loadTaskList]);
 
   const handleSubmit = useCallback(async () => {
     if (!message.trim()) return;
@@ -179,7 +179,7 @@ export default function App() {
         const teamRes = await fetch(`/api/teams/${data.teamId}`);
         const team = await teamRes.json();
         if (team.roles) {
-          initTeam(data.taskId, team.roles, team.strategy, message, data.sessionId, [], continueSession);
+          initTeam(data.taskId, team.roles, team.strategy, message, data.sessionId, [], continueSession, data.teamId);
         }
         setMessage('');
         connectSSE(data.taskId);

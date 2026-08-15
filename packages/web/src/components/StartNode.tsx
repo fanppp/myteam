@@ -11,11 +11,12 @@ function StartNodeComponent({ data }: { data: any }) {
   const history: any[] = data.history || [];
   const onContinue = data.onContinue;
   const sessionId = data.sessionId;
+  const teamId = data.teamId;
 
   const handleContinue = () => {
     const msg = editText.trim() || (data.content as string);
     if (onContinue && sessionId && msg) {
-      onContinue(msg, sessionId);
+      onContinue(msg, sessionId, teamId || '');
       setEditText('');
       setIsEditing(false);
     }

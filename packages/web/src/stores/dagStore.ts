@@ -31,7 +31,7 @@ interface DAGState {
   processedEventIds: Set<number>;
   setTask: (taskId: string) => void;
   setTaskStatus: (status: string) => void;
-  initTeam: (taskId: string, roles: TeamRole[], strategy: string, message?: string, sessionId?: string, history?: any[], onContinue?: (msg: string, sid: string) => void) => void;
+  initTeam: (taskId: string, roles: TeamRole[], strategy: string, message?: string, sessionId?: string, history?: any[], onContinue?: (msg: string, sid: string, tid: string) => void, teamId?: string) => void;
   handleEvent: (event: any) => void;
   syncNodeStatuses: (taskStatus: string) => void;
   reset: () => void;
@@ -77,7 +77,7 @@ export const useDAGStore = create<DAGState>((set, get) => ({
     set({ nodes });
   },
 
-  initTeam: (taskId, roles, strategy, message, sessionId, history, onContinue) => {
+  initTeam: (taskId, roles, strategy, message, sessionId, history, onContinue, teamId) => {
     const roleNodes: Node[] = roles.map((role, i) => {
       let position: { x: number; y: number };
       if (strategy === 'parallel') {
@@ -116,7 +116,7 @@ export const useDAGStore = create<DAGState>((set, get) => ({
           ? ((parallelRoles.length - 1) * (NODE_HEIGHT + V_GAP)) / 2
           : 0,
       },
-      data: { content: message!.trim(), sessionId: sessionId || '', history: history || [], onContinue } as any,
+      data: { content: message!.trim(), sessionId: sessionId || '', teamId: teamId || '', history: history || [], onContinue } as any,
     } : undefined;
     const startTargets = strategy === 'parallel' ? parallelRoles : roles.slice(0, 1);
     const startEdges: Edge[] = startNode ? startTargets.map(role => ({
