@@ -30,11 +30,16 @@ export default function App() {
     const init = async () => {
       try {
         const res = await fetch('/api/tasks');
-        const tasks = await res.json();
-        setTaskList(tasks);
-        // 优先用 API 最新任务，fallback 到 localStorage
+        const data = await res.json();
+        const seen = new Map<string, any>();
+        for (const t of data) {
+          const sid = t.sessionId || t.taskId;
+          if (!seen.has(sid)) seen.set(sid, t);
+        }
+        const deduped = Array.from(seen.values());
+        setTaskList(deduped);
         const saved = localStorage.getItem('currentTaskId');
-        const tid = saved || tasks[0]?.taskId;
+        const tid = saved || deduped[0]?.taskId;
         if (tid) {
           await restoreTask(tid);
         }
