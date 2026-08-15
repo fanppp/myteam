@@ -33,19 +33,20 @@ fastify.get('/api/tasks', async () => {
 });
 
 fastify.post('/api/tasks', async (request, reply) => {
-  const { message, teamId: override, workdir } = request.body as any;
+  const { message, teamId: override, workdir, sessionId: existingSessionId } = request.body as any;
   if (!message) return reply.code(400).send({ error: 'message is required' });
 
   const decision = router.route(message, override);
   const taskId = randomUUID();
+  const sessionId = existingSessionId ?? randomUUID();
   const worktreePath = workdir ?? process.cwd();
 
   const plan = config.resolvePlan(decision.teamId, message, taskId);
-  db.createTask(taskId, message, decision.teamId, worktreePath);
+  db.createTask(taskId, message, decision.teamId, worktreePath, sessionId);
 
-  reply.send({ taskId, teamId: decision.teamId, strategy: decision.strategy, scope: decision.scope });
+  reply.send({ taskId, sessionId, teamId: decision.teamId, strategy: decision.strategy, scope: decision.scope });
 
-  runtime.executeTask(plan, message, worktreePath).catch(err => {
+  runtime.executeTask(plan, message, worktreePath, sessionId).catch(err => {
     fastify.log.error({ err }, 'Task execution failed');
   });
 });
@@ -89,9 +90,14 @@ fastify.get('/api/tasks/:id', async (request, reply) => {
   const taskId = (request.params as any).id;
   const status = db.getTaskStatus(taskId);
   if (!status) return reply.code(404).send({ error: 'not found' });
-  const task = db.db.prepare('SELECT team_id, message FROM tasks WHERE id = ?').get(taskId) as any;
+  const task = db.db.prepare('SELECT team_id, session_id FROM tasks WHERE id = ?').get(taskId) as any;
   const events = db.getEventsAfter(taskId, 0, 10000);
-  reply.send({ taskId, teamId: task?.team_id, message: task?.message, status, events });
+  reply.send({ taskId, sessionId: task?.session_id, teamId: task?.team_id, status, events });
+});
+
+fastify.get('/api/sessions/:sessionId/tasks', async (request) => {
+  const sessionId = (request.params as any).sessionId;
+  return db.getTaskListBySession(sessionId);
 });
 
 fastify.get('/health', async () => ({ status: 'ok' }));

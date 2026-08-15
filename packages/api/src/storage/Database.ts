@@ -50,25 +50,33 @@ export class AppDatabase {
       CREATE INDEX IF NOT EXISTS idx_events_task ON events(task_id, event_id);
 
       CREATE TABLE IF NOT EXISTS sessions (
-        task_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
         role_id TEXT NOT NULL,
         cli_session_id TEXT,
-        PRIMARY KEY (task_id, role_id)
+        PRIMARY KEY (session_id, role_id)
       );
     `);
     this.migrate();
   }
 
   private migrate() {
-    const cols = this.db.prepare('PRAGMA table_info(events)').all() as Array<{ name: string }>;
-    if (!cols.some(c => c.name === 'cli')) {
+    const eventCols = this.db.prepare('PRAGMA table_info(events)').all() as Array<{ name: string }>;
+    if (!eventCols.some(c => c.name === 'cli')) {
       this.db.exec('ALTER TABLE events ADD COLUMN cli TEXT');
+    }
+    const taskCols = this.db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+    if (!taskCols.some(c => c.name === 'session_id')) {
+      this.db.exec('ALTER TABLE tasks ADD COLUMN session_id TEXT');
+    }
+    const sessionCols = this.db.prepare('PRAGMA table_info(sessions)').all() as Array<{ name: string }>;
+    if (sessionCols.some(c => c.name === 'task_id')) {
+      this.db.exec('DROP TABLE sessions; CREATE TABLE IF NOT EXISTS sessions (session_id TEXT NOT NULL, role_id TEXT NOT NULL, cli_session_id TEXT, PRIMARY KEY (session_id, role_id))');
     }
   }
 
-  createTask(id: string, message: string, teamId: string, worktreePath: string) {
-    this.db.prepare('INSERT INTO tasks (id, message, team_id, worktree_path, created_at) VALUES (?,?,?,?,?)')
-      .run(id, message, teamId, worktreePath, Date.now());
+  createTask(id: string, message: string, teamId: string, worktreePath: string, sessionId: string) {
+    this.db.prepare('INSERT INTO tasks (id, message, team_id, worktree_path, session_id, created_at) VALUES (?,?,?,?,?,?)')
+      .run(id, message, teamId, worktreePath, sessionId, Date.now());
     this.db.prepare('INSERT INTO task_states (task_id, status, started_at) VALUES (?,?,?)')
       .run(id, 'running', Date.now());
   }
@@ -107,5 +115,28 @@ export class AppDatabase {
       toNode: r.to_node, status: r.status as RoleStatus | undefined, cli: r.cli,
       epoch: r.epoch, createdAt: r.created_at,
     }));
+  }
+
+  getCliSessionId(sessionId: string, roleId: string): string | null {
+    const row = this.db.prepare('SELECT cli_session_id FROM sessions WHERE session_id = ? AND role_id = ?')
+      .get(sessionId, roleId) as { cli_session_id: string | null } | undefined;
+    return row?.cli_session_id ?? null;
+  }
+
+  setCliSessionId(sessionId: string, roleId: string, cliSessionId: string) {
+    this.db.prepare('INSERT OR REPLACE INTO sessions (session_id, role_id, cli_session_id) VALUES (?,?,?)')
+      .run(sessionId, roleId, cliSessionId);
+  }
+
+  getSessionIdByTask(taskId: string): string | null {
+    const row = this.db.prepare('SELECT session_id FROM tasks WHERE id = ?').get(taskId) as { session_id: string | null } | undefined;
+    return row?.session_id ?? null;
+  }
+
+  getTaskListBySession(sessionId: string): Array<{ taskId: string; message: string; status: string; createdAt: number }> {
+    const rows = this.db.prepare(
+      `SELECT t.id, t.message, ts.status, t.created_at FROM tasks t JOIN task_states ts ON t.id = ts.task_id WHERE t.session_id = ? ORDER BY t.created_at ASC`
+    ).all(sessionId) as any[];
+    return rows.map(r => ({ taskId: r.id, message: r.message, status: r.status, createdAt: r.created_at }));
   }
 }

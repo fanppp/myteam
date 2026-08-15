@@ -12,6 +12,7 @@ export default function App() {
   const [teamId, setTeamId] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState('');
+  const [sessionId, setSessionId] = useState('');
   const [taskList, setTaskList] = useState<any[]>([]);
   const [viewport] = useState(() => {
     try {
@@ -57,11 +58,19 @@ export default function App() {
       if (!data.taskId) return;
       reset();
       setSelectedTeam(data.teamId || 'auto');
+      setSessionId(data.sessionId || '');
       if (data.teamId) {
         const teamRes = await fetch(`/api/teams/${data.teamId}`);
         const team = await teamRes.json();
         if (team.roles) {
-          initTeam(tid, team.roles, team.strategy, data.message);
+          let history: any[] = [];
+          if (data.sessionId) {
+            try {
+              const histRes = await fetch(`/api/sessions/${data.sessionId}/tasks`);
+              history = await histRes.json();
+            } catch {}
+          }
+          initTeam(tid, team.roles, team.strategy, data.message, data.sessionId, history, continueSession);
         } else {
           setTask(tid);
         }
@@ -105,6 +114,46 @@ export default function App() {
     };
   }, [handleEvent, setTaskStatus, loadTaskList]);
 
+  const continueSession = useCallback(async (newMessage: string, sid: string) => {
+    if (!newMessage.trim() || !sid) return;
+    setLoading(true);
+    reset();
+
+    try {
+      const body: any = { message: newMessage, sessionId: sid };
+      body.workdir = 'D:\\000agent\\opensource\\myteam';
+      if (selectedTeam) body.teamId = selectedTeam;
+
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+
+      if (data.taskId) {
+        localStorage.setItem('currentTaskId', data.taskId);
+        reset();
+        const teamRes = await fetch(`/api/teams/${data.teamId}`);
+        const team = await teamRes.json();
+        let history: any[] = [];
+        try {
+          const histRes = await fetch(`/api/sessions/${sid}/tasks`);
+          history = await histRes.json();
+        } catch {}
+        if (team.roles) {
+          initTeam(data.taskId, team.roles, team.strategy, newMessage, sid, history, continueSession);
+        }
+        connectSSE(data.taskId);
+        loadTaskList();
+      }
+    } catch (err) {
+      console.error('Failed to continue session:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedTeam, reset, initTeam, connectSSE, loadTaskList]);
+
   const handleSubmit = useCallback(async () => {
     if (!message.trim()) return;
     setLoading(true);
@@ -124,12 +173,13 @@ export default function App() {
 
       if (data.taskId) {
         localStorage.setItem('currentTaskId', data.taskId);
+        setSessionId(data.sessionId || '');
         setSelectedTeam(data.teamId || 'auto');
         reset();
         const teamRes = await fetch(`/api/teams/${data.teamId}`);
         const team = await teamRes.json();
         if (team.roles) {
-          initTeam(data.taskId, team.roles, team.strategy, message);
+          initTeam(data.taskId, team.roles, team.strategy, message, data.sessionId, [], continueSession);
         }
         setMessage('');
         connectSSE(data.taskId);
@@ -140,7 +190,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [message, teamId, reset, initTeam, connectSSE, loadTaskList]);
+  }, [message, teamId, reset, initTeam, connectSSE, loadTaskList, continueSession]);
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#11111b' }}>

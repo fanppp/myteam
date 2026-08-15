@@ -21,6 +21,7 @@ export async function spawnCli(
   timeoutMs: number,
   signal: AbortSignal,
   onEvent?: (event: AgentEvent) => void,
+  resumeSessionId?: string,
   stallMs: number = DEFAULT_STALL_MS,
 ): Promise<SpawnResult> {
   const cli = role.cliConfig;
@@ -31,7 +32,29 @@ export async function spawnCli(
   const env = { ...process.env, ...cli.env, ...role.resolvedEnv };
 
   const isArgMode = cli.prompt_via === 'arg';
-  const finalArgs = isArgMode ? [...cli.args, prompt] : cli.args;
+  let finalArgs = isArgMode ? [...cli.args, prompt] : [...cli.args];
+
+  if (resumeSessionId) {
+    if (cli.event_parser === 'claude') {
+      const dashIdx = finalArgs.lastIndexOf('--');
+      if (dashIdx >= 0) {
+        finalArgs.splice(dashIdx, 0, '--resume', resumeSessionId);
+      } else {
+        finalArgs.push('--resume', resumeSessionId);
+      }
+    } else if (cli.event_parser === 'codex') {
+      const execIdx = finalArgs.indexOf('exec');
+      if (execIdx >= 0) {
+        finalArgs.splice(execIdx + 1, 0, 'resume', resumeSessionId);
+      }
+    } else if (cli.event_parser === 'opencode') {
+      const runIdx = finalArgs.indexOf('run');
+      if (runIdx >= 0) {
+        finalArgs.splice(runIdx + 1, 0, '--session', resumeSessionId);
+      }
+    }
+    console.log(`[CliSpawn] resuming session: ${resumeSessionId} (${cli.event_parser})`);
+  }
 
   const child = spawn(cli.command, finalArgs, {
     cwd,

@@ -47,16 +47,16 @@ export class TaskRuntime {
     return event;
   }
 
-  async executeTask(plan: ExecutionPlan, message: string, worktreePath: string): Promise<void> {
+  async executeTask(plan: ExecutionPlan, message: string, worktreePath: string, sessionId: string): Promise<void> {
     const taskId = plan.taskId;
     const controller = new AbortController();
     this.activeControllers.set(taskId, controller);
 
     try {
       if (plan.strategy === 'parallel') {
-        await this.executeParallel(plan, message, worktreePath, controller.signal);
+        await this.executeParallel(plan, message, worktreePath, controller.signal, sessionId);
       } else {
-        await this.executeSerial(plan, message, worktreePath, controller.signal);
+        await this.executeSerial(plan, message, worktreePath, controller.signal, sessionId);
       }
       this.emit('task_done', taskId, undefined, 'final', { status: 'done' });
       this.db.updateTaskStatus(taskId, 'done');
@@ -77,7 +77,7 @@ export class TaskRuntime {
     }
   }
 
-  private async executeSerial(plan: ExecutionPlan, message: string, cwd: string, signal: AbortSignal) {
+  private async executeSerial(plan: ExecutionPlan, message: string, cwd: string, signal: AbortSignal, sessionId: string) {
     let currentInput = message;
     const nodeIdBase = plan.taskId;
 
@@ -100,6 +100,7 @@ export class TaskRuntime {
 
       const prompt = this.buildPrompt(role, currentInput, plan);
       const timeoutMs = Math.min((role.max_turns ?? 50) * 60000, plan.totalBudget?.timeoutMs ?? 1800000);
+      const resumeSessionId = this.db.getCliSessionId(sessionId, role.id) ?? undefined;
 
       let outputText = '';
       const result = await spawnCli(role, prompt, cwd, timeoutMs, signal, (ev) => {
@@ -108,11 +109,10 @@ export class TaskRuntime {
           this.emit(mapped.type, plan.taskId, role.id, attemptId, mapped.extra);
         }
         if (ev.type === 'text') outputText += ev.content;
-      });
+      }, resumeSessionId);
 
       if (result.sessionId) {
-        this.db.db.prepare('INSERT OR REPLACE INTO sessions (task_id, role_id, cli_session_id) VALUES (?,?,?)')
-          .run(plan.taskId, role.id, result.sessionId);
+        this.db.setCliSessionId(sessionId, role.id, result.sessionId);
       }
 
       if (result.exitCode !== 0 && result.exitCode !== null && !signal.aborted) {
@@ -133,7 +133,7 @@ export class TaskRuntime {
     }
   }
 
-  private async executeParallel(plan: ExecutionPlan, message: string, cwd: string, signal: AbortSignal) {
+  private async executeParallel(plan: ExecutionPlan, message: string, cwd: string, signal: AbortSignal, sessionId: string) {
     const parallelRoles = plan.roles.filter(r => !r.receives_from || r.receives_from.length === 0);
     const synthesizer = plan.roles.find(r => r.receives_from && r.receives_from.length > 0);
 
@@ -149,6 +149,7 @@ export class TaskRuntime {
 
       const prompt = this.buildPrompt(role, message, plan);
       const timeoutMs = Math.min((role.max_turns ?? 50) * 60000, plan.totalBudget?.timeoutMs ?? 1800000);
+      const resumeSessionId = this.db.getCliSessionId(sessionId, role.id) ?? undefined;
 
       let outputText = '';
       const result = await spawnCli(role, prompt, cwd, timeoutMs, signal, (ev) => {
@@ -157,7 +158,11 @@ export class TaskRuntime {
           this.emit(mapped.type, plan.taskId, role.id, attemptId, mapped.extra);
         }
         if (ev.type === 'text') outputText += ev.content;
-      });
+      }, resumeSessionId);
+
+      if (result.sessionId) {
+        this.db.setCliSessionId(sessionId, role.id, result.sessionId);
+      }
 
       this.emit('node_complete', plan.taskId, role.id, attemptId, {
         nodeId, status: 'done',
@@ -184,12 +189,17 @@ export class TaskRuntime {
       const combinedInput = parallelRoles.map(r => `【${r.id}的观点】\n${results[r.id]}`).join('\n\n');
       const prompt = this.buildPrompt(synthesizer, combinedInput, plan);
       const timeoutMs = Math.min(synthesizer.max_turns * 60000, plan.totalBudget.timeoutMs);
+      const synthResumeId = this.db.getCliSessionId(sessionId, synthesizer.id) ?? undefined;
       const result = await spawnCli(synthesizer, prompt, cwd, timeoutMs, signal, (ev) => {
         const mapped = this.mapEvent(ev, plan.taskId, synthesizer.id, attemptId, nodeId);
         if (mapped) {
           this.emit(mapped.type, plan.taskId, synthesizer.id, attemptId, mapped.extra);
         }
-      });
+      }, synthResumeId);
+
+      if (result.sessionId) {
+        this.db.setCliSessionId(sessionId, synthesizer.id, result.sessionId);
+      }
 
       this.emit('node_complete', plan.taskId, synthesizer.id, attemptId, {
         nodeId, status: 'done',
