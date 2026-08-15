@@ -47,7 +47,12 @@ export default function App() {
     try {
       const res = await fetch('/api/tasks');
       const data = await res.json();
-      setTaskList(data);
+      const seen = new Map<string, any>();
+      for (const t of data) {
+        const sid = t.sessionId || t.taskId;
+        if (!seen.has(sid)) seen.set(sid, t);
+      }
+      setTaskList(Array.from(seen.values()));
     } catch {}
   }, []);
 
@@ -196,21 +201,21 @@ export default function App() {
       {/* 左侧任务历史侧边栏 */}
       <div style={{ width: '240px', background: '#181825', borderRight: '1px solid #313244', overflow: 'auto', flexShrink: 0 }}>
         <div style={{ padding: '16px 12px 8px', color: '#6c7086', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          历史任务
+          会话历史
         </div>
         {taskList.length === 0 && (
           <div style={{ padding: '8px 12px', color: '#6c7086', fontSize: '13px' }}>暂无</div>
         )}
         {taskList.map(t => (
           <div
-            key={t.taskId}
+            key={t.sessionId || t.taskId}
             onClick={() => { localStorage.setItem('currentTaskId', t.taskId); reset(); restoreTask(t.taskId); }}
             style={{
               padding: '10px 12px',
               cursor: 'pointer',
               borderBottom: '1px solid #31324422',
-              color: taskId === t.taskId ? '#cdd6f4' : '#7f849c',
-              background: taskId === t.taskId ? '#31324433' : 'transparent',
+              color: sessionId === (t.sessionId || t.taskId) ? '#cdd6f4' : '#7f849c',
+              background: sessionId === (t.sessionId || t.taskId) ? '#31324433' : 'transparent',
               fontSize: '13px',
               transition: 'all 0.15s',
               display: 'flex',
@@ -218,7 +223,7 @@ export default function App() {
               gap: '4px',
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#31324422'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = taskId === t.taskId ? '#31324433' : 'transparent'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = sessionId === (t.sessionId || t.taskId) ? '#31324433' : 'transparent'; }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{

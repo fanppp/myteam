@@ -27,16 +27,24 @@ const fastify = Fastify({ logger: { level: 'info' } });
 
 fastify.get('/api/tasks', async () => {
   const tasks = db.db.prepare(
-    'SELECT t.id, t.message, t.team_id, t.created_at, ts.status FROM tasks t JOIN task_states ts ON t.id = ts.task_id ORDER BY t.created_at DESC LIMIT 20'
+    `SELECT t.id, t.message, t.team_id, t.session_id, t.created_at, ts.status 
+     FROM tasks t JOIN task_states ts ON t.id = ts.task_id 
+     ORDER BY t.created_at DESC LIMIT 20`
   ).all() as any[];
-  return tasks.map(t => ({ taskId: t.id, message: t.message, teamId: t.team_id, status: t.status, createdAt: t.created_at }));
+  return tasks.map(t => ({ taskId: t.id, message: t.message, teamId: t.team_id, sessionId: t.session_id, status: t.status, createdAt: t.created_at }));
 });
 
 fastify.post('/api/tasks', async (request, reply) => {
   const { message, teamId: override, workdir, sessionId: existingSessionId } = request.body as any;
   if (!message) return reply.code(400).send({ error: 'message is required' });
 
-  const decision = router.route(message, override);
+  let effectiveOverride = override;
+  if (!effectiveOverride && existingSessionId) {
+    const prevTask = db.db.prepare('SELECT team_id FROM tasks WHERE session_id = ? ORDER BY created_at ASC LIMIT 1').get(existingSessionId) as any;
+    if (prevTask?.team_id) effectiveOverride = prevTask.team_id;
+  }
+
+  const decision = router.route(message, effectiveOverride);
   const taskId = randomUUID();
   const sessionId = existingSessionId ?? randomUUID();
   const worktreePath = workdir ?? process.cwd();
