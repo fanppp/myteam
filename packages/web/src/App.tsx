@@ -93,7 +93,7 @@ export default function App() {
     } catch {}
   };
 
-  const connectSSE = useCallback((tid: string) => {
+  const connectSSE = useCallback((tid: string, isNewSession = false) => {
     if (eventSourceRef.current) eventSourceRef.current.close();
 
     const es = new EventSource(`/api/tasks/${tid}/stream`);
@@ -104,7 +104,7 @@ export default function App() {
         const data = JSON.parse(event.data);
         if (data.type === 'task_done') {
           setTaskStatus(data.status || 'done');
-          loadTaskList();
+          if (isNewSession) loadTaskList();
           es.close();
         } else {
           handleEvent(data);
@@ -186,7 +186,7 @@ export default function App() {
           initTeam(data.taskId, team.roles, team.strategy, message, data.sessionId, [], continueSession, data.teamId);
         }
         setMessage('');
-        connectSSE(data.taskId);
+        connectSSE(data.taskId, true);
         loadTaskList();
       }
     } catch (err) {
