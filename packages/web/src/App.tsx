@@ -32,10 +32,10 @@ export default function App() {
         const res = await fetch('/api/tasks');
         const data = await res.json();
         const seen = new Map<string, any>();
-        const latest = new Map<string, { status: string; createdAt: number }>();
+        const latest = new Map<string, { status: string; createdAt: number; taskId: string }>();
         for (const t of data) {
           const sid = t.sessionId || t.taskId;
-          latest.set(sid, { status: t.status, createdAt: t.createdAt });
+          latest.set(sid, { status: t.status, createdAt: t.createdAt, taskId: t.taskId });
         }
         for (let i = data.length - 1; i >= 0; i--) {
           const t = data[i];
@@ -45,7 +45,7 @@ export default function App() {
         const deduped = Array.from(seen.values()).map(t => {
           const sid = t.sessionId || t.taskId;
           const l = latest.get(sid);
-          return { ...t, status: l?.status || t.status, createdAt: l?.createdAt || t.createdAt };
+          return { ...t, status: l?.status || t.status, createdAt: l?.createdAt || t.createdAt, taskId: l?.taskId || t.taskId };
         }).sort((a, b) => b.createdAt - a.createdAt);
         setTaskList(deduped);
         const saved = localStorage.getItem('currentTaskId');
@@ -63,10 +63,10 @@ export default function App() {
       const res = await fetch('/api/tasks');
       const data = await res.json();
       const seen = new Map<string, any>();
-      const latest = new Map<string, { status: string; createdAt: number }>();
+      const latest = new Map<string, { status: string; createdAt: number; taskId: string }>();
       for (const t of data) {
         const sid = t.sessionId || t.taskId;
-        latest.set(sid, { status: t.status, createdAt: t.createdAt });
+        latest.set(sid, { status: t.status, createdAt: t.createdAt, taskId: t.taskId });
       }
       for (let i = data.length - 1; i >= 0; i--) {
         const t = data[i];
@@ -76,7 +76,7 @@ export default function App() {
       const deduped = Array.from(seen.values()).map(t => {
         const sid = t.sessionId || t.taskId;
         const l = latest.get(sid);
-        return { ...t, status: l?.status || t.status, createdAt: l?.createdAt || t.createdAt };
+        return { ...t, status: l?.status || t.status, createdAt: l?.createdAt || t.createdAt, taskId: l?.taskId || t.taskId };
       }).sort((a, b) => b.createdAt - a.createdAt);
       setTaskList(deduped);
     } catch {}
@@ -259,9 +259,9 @@ export default function App() {
                 fontSize: '10px',
                 padding: '1px 6px',
                 borderRadius: '4px',
-                background: t.status === 'done' ? '#22c55e22' : t.status === 'error' ? '#ef444422' : '#3b82f622',
-                color: t.status === 'done' ? '#22c55e' : t.status === 'error' ? '#ef4444' : '#3b82f6',
-              }}>{t.status}</span>
+                background: t.status === 'done' ? '#22c55e22' : t.status === 'error' ? '#ef444422' : t.status === 'cancelled' ? '#f59e0b22' : '#3b82f622',
+                color: t.status === 'done' ? '#22c55e' : t.status === 'error' ? '#ef4444' : t.status === 'cancelled' ? '#f59e0b' : '#3b82f6',
+              }}>{t.status === 'done' ? '完成' : t.status === 'error' ? '错误' : t.status === 'cancelled' ? '中断' : t.status}</span>
               <span style={{ fontSize: '10px', color: '#6c7086' }}>{t.teamId}</span>
             </div>
             <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
