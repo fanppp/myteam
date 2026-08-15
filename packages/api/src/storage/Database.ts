@@ -150,7 +150,7 @@ export class AppDatabase {
 
     return tasks.map(t => {
       const events = this.db.prepare(
-        `SELECT role_id, type, content, cli, node_id FROM events WHERE task_id = ? AND type = 'text' ORDER BY event_id ASC`
+        `SELECT role_id, type, content, cli, node_id FROM events WHERE task_id = ? AND type = 'node_output' AND content IS NOT NULL AND content != '' ORDER BY event_id ASC`
       ).all(t.id) as any[];
 
       const roleMap = new Map<string, { content: string; cli: string }>();
