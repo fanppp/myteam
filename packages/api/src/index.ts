@@ -16,7 +16,16 @@ const HOST = process.env.HOST ?? '127.0.0.1';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 let configDir = resolve(process.cwd(), 'config');
-if (!existsSync(configDir)) configDir = resolve(__dirname, '..', '..', 'config');
+if (!existsSync(resolve(configDir, 'teams.yaml'))) {
+  let dir = __dirname;
+  for (let i = 0; i < 5; i++) {
+    dir = resolve(dir, '..');
+    if (existsSync(resolve(dir, 'config', 'teams.yaml'))) {
+      configDir = resolve(dir, 'config');
+      break;
+    }
+  }
+}
 const config = new ConfigLoader(configDir);
 
 const envName = process.env.MYTEAM_ENV ?? 'default';
