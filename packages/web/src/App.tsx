@@ -145,7 +145,6 @@ export default function App() {
           initTeam(data.taskId, team.roles, team.strategy, newMessage, sid, history, continueSession, data.teamId);
         }
         connectSSE(data.taskId);
-        loadTaskList();
       }
     } catch (err) {
       console.error('Failed to continue session:', err);

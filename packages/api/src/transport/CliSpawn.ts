@@ -43,10 +43,19 @@ export async function spawnCli(
         finalArgs.push('--resume', resumeSessionId);
       }
     } else if (cli.event_parser === 'codex') {
-      const execIdx = finalArgs.indexOf('exec');
-      if (execIdx >= 0) {
-        finalArgs.splice(execIdx + 1, 0, 'resume', resumeSessionId);
+      const result: string[] = [];
+      let skipNext = false;
+      for (let i = 0; i < finalArgs.length; i++) {
+        if (skipNext) { skipNext = false; continue; }
+        if (finalArgs[i] === '--sandbox') { skipNext = true; continue; }
+        if (finalArgs[i] === '--skip-git-repo-check') continue;
+        if (finalArgs[i] === 'exec') {
+          result.push('exec', 'resume', resumeSessionId);
+          continue;
+        }
+        result.push(finalArgs[i]);
       }
+      finalArgs = result;
     } else if (cli.event_parser === 'opencode') {
       const runIdx = finalArgs.indexOf('run');
       if (runIdx >= 0) {
