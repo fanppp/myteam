@@ -12,7 +12,7 @@ function StartNodeComponent({ data }: { data: any }) {
   const syncNodeStatuses = useDAGStore((s) => s.syncNodeStatuses);
 
   useEffect(() => {
-    if (historyRef.current) historyRef.current.scrollTop = 0;
+    if (historyRef.current) historyRef.current.scrollTop = historyRef.current.scrollHeight;
   }, [data.history]);
 
   const isRunning = taskStatus === 'running';
@@ -35,6 +35,17 @@ function StartNodeComponent({ data }: { data: any }) {
       await fetch(`/api/tasks/${taskId}/cancel`, { method: 'POST' });
       setTaskStatus('cancelled');
       syncNodeStatuses('cancelled');
+      if (data.history && data.content) {
+        const newHistory = [...data.history, { taskId, message: data.content, status: 'cancelled' }];
+        // Force re-render by updating store nodes
+        useDAGStore.setState((s) => ({
+          nodes: s.nodes.map(n =>
+            n.type === 'startNode'
+              ? { ...n, data: { ...n.data, history: newHistory, content: '' } }
+              : n
+          ),
+        }));
+      }
     } catch {}
     setAborting(false);
   };
@@ -125,7 +136,7 @@ function StartNodeComponent({ data }: { data: any }) {
         </div>
       )}
 
-      {data.content && (
+      {data.content && isRunning && (
         <div
           className="nodrag nowheel"
           style={{

@@ -180,7 +180,7 @@ export const useDAGStore = create<DAGState>((set, get) => ({
       case 'node_complete': {
         const nodes = state.nodes.map(n => {
           if (n.id === nodeId) {
-            return { ...n, data: { ...(n.data as RoleNodeData), status: 'done' } };
+            return { ...n, data: { ...(n.data as RoleNodeData), status: status || 'done' } };
           }
           return n;
         });
