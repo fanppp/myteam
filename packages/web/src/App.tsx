@@ -32,20 +32,21 @@ export default function App() {
         const res = await fetch('/api/tasks');
         const data = await res.json();
         const seen = new Map<string, any>();
-        const latestStatus = new Map<string, string>();
+        const latest = new Map<string, { status: string; createdAt: number }>();
         for (const t of data) {
           const sid = t.sessionId || t.taskId;
-          latestStatus.set(sid, t.status);
+          latest.set(sid, { status: t.status, createdAt: t.createdAt });
         }
         for (let i = data.length - 1; i >= 0; i--) {
           const t = data[i];
           const sid = t.sessionId || t.taskId;
           if (!seen.has(sid)) seen.set(sid, t);
         }
-        const deduped = Array.from(seen.values()).map(t => ({
-          ...t,
-          status: latestStatus.get(t.sessionId || t.taskId) || t.status
-        }));
+        const deduped = Array.from(seen.values()).map(t => {
+          const sid = t.sessionId || t.taskId;
+          const l = latest.get(sid);
+          return { ...t, status: l?.status || t.status, createdAt: l?.createdAt || t.createdAt };
+        }).sort((a, b) => b.createdAt - a.createdAt);
         setTaskList(deduped);
         const saved = localStorage.getItem('currentTaskId');
         const tid = saved || deduped[0]?.taskId;
@@ -62,20 +63,21 @@ export default function App() {
       const res = await fetch('/api/tasks');
       const data = await res.json();
       const seen = new Map<string, any>();
-      const latestStatus = new Map<string, string>();
+      const latest = new Map<string, { status: string; createdAt: number }>();
       for (const t of data) {
         const sid = t.sessionId || t.taskId;
-        latestStatus.set(sid, t.status);
+        latest.set(sid, { status: t.status, createdAt: t.createdAt });
       }
       for (let i = data.length - 1; i >= 0; i--) {
         const t = data[i];
         const sid = t.sessionId || t.taskId;
         if (!seen.has(sid)) seen.set(sid, t);
       }
-      const deduped = Array.from(seen.values()).map(t => ({
-        ...t,
-        status: latestStatus.get(t.sessionId || t.taskId) || t.status
-      }));
+      const deduped = Array.from(seen.values()).map(t => {
+        const sid = t.sessionId || t.taskId;
+        const l = latest.get(sid);
+        return { ...t, status: l?.status || t.status, createdAt: l?.createdAt || t.createdAt };
+      }).sort((a, b) => b.createdAt - a.createdAt);
       setTaskList(deduped);
     } catch {}
   }, []);
