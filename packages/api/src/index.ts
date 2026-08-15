@@ -90,9 +90,9 @@ fastify.get('/api/tasks/:id', async (request, reply) => {
   const taskId = (request.params as any).id;
   const status = db.getTaskStatus(taskId);
   if (!status) return reply.code(404).send({ error: 'not found' });
-  const task = db.db.prepare('SELECT team_id, session_id FROM tasks WHERE id = ?').get(taskId) as any;
+  const task = db.db.prepare('SELECT team_id, session_id, message FROM tasks WHERE id = ?').get(taskId) as any;
   const events = db.getEventsAfter(taskId, 0, 10000);
-  reply.send({ taskId, sessionId: task?.session_id, teamId: task?.team_id, status, events });
+  reply.send({ taskId, sessionId: task?.session_id, teamId: task?.team_id, message: task?.message, status, events });
 });
 
 fastify.get('/api/sessions/:sessionId/tasks', async (request) => {
